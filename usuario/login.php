@@ -1,0 +1,98 @@
+<?php
+// Caminho correto voltando uma pasta para pegar o header
+require_once '../geral/header.php';
+?>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+<main class="container py-5 mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-5 col-md-8 col-sm-10">
+
+            <div class="card bg-body-tertiary border-secondary-subtle shadow-lg p-4 p-md-5 rounded-4">
+
+                <div class="text-center mb-4">
+                    <div class="display-4 text-primary mb-3"><i class="bi bi-box-arrow-in-right"></i></div>
+                    <h2 class="fw-bold text-light">Bem-vindo de volta</h2>
+                    <p class="text-light opacity-75">Acesse sua conta para continuar.</p>
+                </div>
+
+                <form action="processa_login.php" method="POST">
+
+                    <div class="mb-4">
+                        <label for="email" class="form-label text-light opacity-75 fw-semibold">E-mail</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-secondary"><i
+                                    class="bi bi-envelope-fill"></i></span>
+                            <input type="email" class="form-control form-control-lg bg-dark border-secondary text-light"
+                                id="email" name="email" required placeholder="">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between">
+                            <label for="senha" class="form-label text-light opacity-75 fw-semibold">Senha</label>
+                            <a href="#" class="text-primary text-decoration-none small custom-link">Esqueceu a
+                                senha?</a>
+                        </div>
+                        <div class="input-group">
+                            <span class="input-group-text bg-dark border-secondary text-secondary"><i
+                                    class="bi bi-lock-fill"></i></span>
+                            <input type="password"
+                                class="form-control form-control-lg bg-dark border-secondary text-light border-end-0"
+                                id="senha" name="senha" required placeholder="">
+                            <button class="btn btn-dark border-secondary border-start-0 text-secondary" type="button"
+                                id="btnMostrarSenha">
+                                <i class="bi bi-eye-fill" id="iconeSenha"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mb-4 form-check">
+                        <input type="checkbox" class="form-check-input custom-switch" id="lembrar" name="lembrar">
+                        <label class="form-check-label text-light opacity-75 small" for="lembrar">Lembrar de mim neste
+                            dispositivo</label>
+                    </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit"
+                            class="btn btn-primary btn-lg fw-bold text-dark fs-5 cardCentral py-3">Entrar no
+                            Auralis</button>
+                    </div>
+
+                    <div class="text-center mt-5">
+                        <p class="text-light opacity-75 mb-0">Ainda não tem uma conta? <a href="cadastro.php"
+                                class="text-primary text-decoration-none fw-semibold custom-link">Cadastre-se grátis</a>
+                        </p>
+                    </div>
+
+                </form>
+            </div>
+
+        </div>
+    </div>
+</main>
+
+<script>
+    // Lógica para o botão de Mostrar/Ocultar Senha
+    const btnMostrarSenha = document.getElementById('btnMostrarSenha');
+    const inputSenha = document.getElementById('senha');
+    const iconeSenha = document.getElementById('iconeSenha');
+
+    btnMostrarSenha.addEventListener('click', function () {
+        // Verifica se o campo está como password ou text
+        if (inputSenha.type === 'password') {
+            inputSenha.type = 'text'; // Mostra a senha
+            iconeSenha.classList.remove('bi-eye-fill');
+            iconeSenha.classList.add('bi-eye-slash-fill'); // Troca o ícone para o olho cortado
+        } else {
+            inputSenha.type = 'password'; // Oculta a senha
+            iconeSenha.classList.remove('bi-eye-slash-fill');
+            iconeSenha.classList.add('bi-eye-fill'); // Volta o ícone normal
+        }
+    });
+</script>
+
+<?php
+// Caminho correto voltando uma pasta para pegar o footer
+require_once '../geral/footer.php';
+?>
