@@ -1,15 +1,55 @@
 /* Importação de fonte moderna */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+/* Importando a Fonte Inter Localmente (Arquivos 18pt) */
+@font-face {
+    font-family: 'Inter';
+    src: url('fonts/Inter_18pt-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+}
 
-:root {
-    --bg-dark: #0f172a;
-    /* Azul quase preto */
-    --bg-card: #1e293b;
-    /* Azul acinzentado */
-    --accent: #38bdf8;
-    /* Azul "Sky" brilhante */
+@font-face {
+    font-family: 'Inter';
+    src: url('fonts/Inter_18pt-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url('fonts/Inter_18pt-SemiBold.ttf') format('truetype');
+    font-weight: 600;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url('fonts/Inter_18pt-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+}
+
+/* Sobrescrevendo o tema escuro do Bootstrap e criando nossas variáveis */
+:root,
+[data-bs-theme="dark"] {
+    --bg-dark: #121418;
+    /* Um fundo escuro mais sofisticado e quente */
+    --bg-card: #1e2126;
+    /* Fundo dos cards levemente destacado */
+
+    /* A Paleta Dourada */
+    --accent: #d4af37;
+    /* Ouro Metálico Clássico */
+    --accent-light: #f9e596;
+    /* Dourado claro para o gradiente e brilho */
+
     --text-main: #f8fafc;
-    --text-muted: #94a3b8;
+    --text-muted: #a1a1aa;
+
+    /* Forçando o Bootstrap a usar o nosso Dourado como cor "Primary" */
+    --bs-primary: var(--accent);
+    --bs-primary-rgb: 212, 175, 55;
+    --bs-link-color: var(--accent);
+    --bs-link-hover-color: var(--accent-light);
 }
 
 body {
@@ -21,14 +61,14 @@ body {
 
 /* Efeito de Vidro na Navbar */
 .navbar {
-    background-color: rgba(15, 23, 42, 0.8) !important;
+    background-color: rgba(18, 20, 24, 0.8) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
 
-/* Gradiente no Título (Hero Section) */
+/* Gradiente no Título (Hero Section) com tons de ouro */
 h1 span {
-    background: linear-gradient(90deg, var(--accent), #818cf8);
+    background: linear-gradient(90deg, var(--accent), var(--accent-light));
     background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -37,15 +77,16 @@ h1 span {
 /* Cards Estilizados */
 .feature-card {
     background-color: var(--bg-card);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    /* Borda bem sutil dourada */
     border-radius: 1.25rem;
     padding: 2rem;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 .feature-card:hover {
     transform: translateY(-10px);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(212, 175, 55, 0.1);
     border-color: var(--accent);
 }
 
@@ -53,55 +94,12 @@ h1 span {
 .btn-primary {
     background-color: var(--accent);
     border: none;
-    color: #0f172a;
-    font-weight: 600;
+    color: #121418 !important;
+    /* Texto escuro para dar contraste no botão dourado */
+    font-weight: 700;
 }
 
 .btn-primary:hover {
-    background-color: #7dd3fc;
-    transform: scale(1.02);
-}
-
-/* Linha de separação discreta */
-.border-secondary {
-    border-color: rgba(148, 163, 184, 0.1) !important;
-}
-
-.cardCentral {
-    transition: transform 0.3s ease-in-out;
-    /* O amortecedor da animação */
-}
-
-.cardCentral:hover {
-    transform: scale(1.05) translateY(-5px);
-}
-
-.custom-link {
-    transition: color 0.2s ease-in-out, opacity 0.2s ease-in-out;
-}
-
-.custom-link:hover {
-    color: var(--accent) !important;
-    opacity: 1 !important;
-}
-
-/* ==========================================
-   TRAVA DO RODAPÉ (Sticky Footer com Flexbox)
-   ========================================= */
-
-body {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    /* Garante que o body ocupe 100% da altura da tela (Viewport Height) */
-}
-
-main {
-    flex: 1 0 auto;
-    /* Faz o conteúdo principal esticar e empurrar o footer para baixo */
-}
-
-footer {
-    flex-shrink: 0;
-    /* Impede que o footer seja esmagado se o conteúdo for muito grande */
+    background-color: var(--accent-light);
+    color: #000000 !important;
 }
