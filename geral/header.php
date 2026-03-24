@@ -19,6 +19,8 @@ if (session_status() === PHP_SESSION_NONE) {
     <link href="/Auralis/geral/css/bootstrap.min.css" rel="stylesheet">
 
     <link href="/Auralis/geral/css/bootstrap-icons.css" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
     <link rel="stylesheet" href="/Auralis/geral/style.css">
 </head>
