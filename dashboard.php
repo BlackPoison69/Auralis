@@ -93,7 +93,16 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                     <?php endforeach; ?>
                 </select>
 
-                <a href="nova_transacao.php" class="btn btn-primary fw-semibold text-dark cardCentral d-flex align-items-center">
+                <?php
+                // Lógica para injetar o ID da carteira na URL do botão, se houver uma selecionada
+                $link_nova_transacao = "nova_transacao.php";
+                if ($carteira_selecionada !== 'todas') {
+                    $link_nova_transacao .= "?carteira_id=" . urlencode($carteira_selecionada);
+                }
+                ?>
+
+                <a href="<?= $link_nova_transacao ?>"
+                    class="btn btn-primary fw-semibold text-dark cardCentral d-flex align-items-center">
                     <i class="bi bi-plus-lg me-1"></i> Transação
                 </a>
             </div>
