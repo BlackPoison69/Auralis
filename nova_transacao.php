@@ -138,148 +138,383 @@ require_once 'geral/header.php';
             <?php else: ?>
 
                 <div class="card bg-body-tertiary border-secondary-subtle shadow-sm rounded-4">
-                    <div class="card-body p-4">
-                        <form method="POST" action="" novalidate>
+                    <form method="POST" action="" novalidate class="auralis-premium-form" style="border-radius: 200px !important;">
 
-                            <div class="mb-4">
-                                <label class="form-label text-light fw-semibold">Tipo</label>
-                                <div class="d-flex gap-3">
-                                    <input type="radio" class="btn-check" name="tipo_registro" id="tipo_receita"
-                                        value="receita" <?= (($_POST['tipo_registro'] ?? 'despesa') === 'receita') ? 'checked' : '' ?>>
-                                    <label class="btn btn-outline-success flex-grow-1 fw-semibold" for="tipo_receita">
-                                        <i class="bi bi-arrow-up-circle me-2"></i>Receita
-                                    </label>
+<?php $tipo_sugerido = $_POST['tipo_registro'] ?? $_GET['tipo'] ?? 'despesa'; ?>
 
-                                    <input type="radio" class="btn-check" name="tipo_registro" id="tipo_despesa"
-                                        value="despesa" <?= (($_POST['tipo_registro'] ?? 'despesa') === 'despesa') ? 'checked' : '' ?>>
-                                    <label class="btn btn-outline-danger flex-grow-1 fw-semibold" for="tipo_despesa">
-                                        <i class="bi bi-arrow-down-circle me-2"></i>Despesa
-                                    </label>
-                                </div>
+<input type="hidden" name="tipo_registro" value="<?= $tipo_sugerido ?>">
+
+<div class="text-center my-4">
+    <span class="badge badge-tipo rounded-pill d-inline-flex align-items-center justify-content-center gap-2 px-5 py-3 shadow-sm">
+
+        <?php if ($tipo_sugerido === 'receita'): ?>
+            <span class="fw-bold text-success fs-5">
+                💰 Receita
+            </span>
+        <?php else: ?>
+            <span class="fw-bold text-danger fs-5">
+                💸 Despesa
+            </span>
+        <?php endif; ?>
+
+    </span>
+</div>
+
+                        <div class="mb-5 d-flex align-items-center justify-content-center pb-3 auralis-line-input">
+                            <input type="number" step="0.01" min="0.01" name="valor" id="valor"
+                                class="form-control form-control-lg bg-transparent border-0 text-gold-analysis fw-bold text-center fs-1-large p-0 p-lg-1 no-spinners"
+                                placeholder="Valor:" required autofocus style="box-shadow: none;"
+                                value="<?= htmlspecialchars($_POST['valor'] ?? '') ?>">   
+                        </div>
+
+                        <div class="d-flex align-items-center mb-4 pb-2 auralis-line-input">
+                            <i class="bi bi-paragraph text-secondary-analysis me-3 w-icon text-center"></i>
+                            <input type="text" name="descricao" id="descricao"
+                                class="form-control bg-transparent border-0 text-light-analysis px-0 shadow-none fs-6 fw-bold"
+                                placeholder="Descrição:" maxlength="255" required
+                                value="<?= htmlspecialchars($_POST['descricao'] ?? '') ?>">
+                        </div>
+
+                        <div class="d-flex align-items-center justify-content-between mb-4 pb-3 auralis-line-input">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-clock-history text-secondary-analysis me-3 w-icon text-center"></i>
+                                <span class="text-secondary-analysis fs-6" id="texto_status">Não pago ainda</span>
                             </div>
+                            <div class="form-check form-switch fs-4 mb-0 toggle-analysis">
+                                <input type="hidden" name="status_registro" id="status_real" value="pendente">
 
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <label for="valor" class="form-label text-light fw-semibold">Valor (R$)</label>
-                                    <div class="input-group">
-                                        <span class="input-group-text bg-dark border-secondary text-secondary">R$</span>
-                                        <input type="number" step="0.01" min="0.01" name="valor" id="valor"
-                                            class="form-control bg-dark border-secondary text-light fs-5 fw-bold"
-                                            placeholder="0,00" required
-                                            value="<?= htmlspecialchars($_POST['valor'] ?? '') ?>">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="status_registro" class="form-label text-light fw-semibold">Status</label>
-                                    <select name="status_registro" id="status_registro"
-                                        class="form-select bg-dark border-secondary text-light fw-semibold" required>
-                                        <option value="pendente" <?= (($_POST['status_registro'] ?? 'efetivado') === 'pendente') ? 'selected' : '' ?>>⏳ Pendente</option>
-                                        <option value="efetivado" id="opt_efetivado" <?= (($_POST['status_registro'] ?? 'efetivado') === 'efetivado') ? 'selected' : '' ?>>✅ Efetivado</option>
-                                    </select>
-                                </div>
+                                <input class="form-check-input bg-dark border-border-color shadow-none" type="checkbox"
+                                    role="switch" id="toggle_status">
                             </div>
+                        </div>
 
-                            <div class="mb-3">
-                                <label for="descricao" class="form-label text-light fw-semibold">Descrição</label>
-                                <input type="text" name="descricao" id="descricao"
-                                    class="form-control bg-dark border-secondary text-light"
-                                    placeholder="Ex: Conta de luz, Salário, Mercado..." maxlength="255" required
-                                    value="<?= htmlspecialchars($_POST['descricao'] ?? '') ?>">
-                            </div>
+                        <div class="d-flex align-items-center mb-4 pb-2 auralis-line-input">
+                            <i class="bi bi-credit-card text-secondary-analysis me-3 w-icon text-center"></i>
+                            <select name="carteira_id" id="carteira_id"
+                                class="form-select bg-transparent border-0 text-light-analysis px-0 shadow-none fw-semibold fs-6"
+                                required>
+                                                    <?php $carteira_sugerida = $_POST['carteira_id'] ?? $_GET['carteira_id'] ?? ''; ?>
+                                                    <?php foreach ($carteiras as $cart): ?>
+                                    <option class="bg-card" value="<?= htmlspecialchars($cart['IDCarteira']) ?>"
+                                        <?= ($carteira_sugerida === $cart['IDCarteira']) ? 'selected' : '' ?>>
+                                                            <?= htmlspecialchars($cart['TipoCarteira']) ?>
+                                    </option>
+                                                    <?php endforeach; ?>
+                            </select>
+                        </div>
 
-                            <div class="mb-3">
-                                <label for="carteira_id" class="form-label text-light fw-semibold">Carteira</label>
-                                <select name="carteira_id" id="carteira_id"
-                                    class="form-select bg-dark border-secondary text-light" required>
-
-                                    <?php
-                                    // Verifica se veio uma carteira pré-selecionada via URL ou via POST (se o form der erro e recarregar)
-                                    $carteira_sugerida = $_POST['carteira_id'] ?? $_GET['carteira_id'] ?? '';
-                                    ?>
-
-                                    <option value="" disabled <?= empty($carteira_sugerida) ? 'selected' : '' ?>>Escolha a
-                                        carteira...</option>
-
-                                    <?php foreach ($carteiras as $cart): ?>
-                                        <option value="<?= htmlspecialchars($cart['IDCarteira']) ?>"
-                                            <?= ($carteira_sugerida === $cart['IDCarteira']) ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($cart['TipoCarteira']) ?>
+                        <div class="row g-3 mb-4 auralis-line-input">
+                            <div class="col-6 d-flex align-items-center border-end border-border-color pe-3">
+                                <i class="bi bi-tags text-secondary-analysis me-2 fs-7"></i>
+                                <select name="categoria_id"
+                                    class="form-select bg-transparent border-0 text-muted-analysis px-0 shadow-none fs-7 fw-bold">
+                                    <option class="bg-card" value="">Categoria</option>
+                                                        <?php foreach ($categorias as $cat): ?>
+                                        <option class="bg-card" value="<?= htmlspecialchars($cat['IDCategoria']) ?>"
+                                            <?= (isset($_POST['categoria_id']) && $_POST['categoria_id'] === $cat['IDCategoria']) ? 'selected' : '' ?>>
+                                                                <?= htmlspecialchars($cat['NomeCategoria']) ?>
                                         </option>
-                                    <?php endforeach; ?>
+                                                        <?php endforeach; ?>
                                 </select>
                             </div>
 
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <label for="categoria_id" class="form-label text-light fw-semibold">Categoria <span
-                                            class="text-secondary fw-normal small">(opcional)</span></label>
-                                    <select name="categoria_id" id="categoria_id"
-                                        class="form-select bg-dark border-secondary text-light">
-                                        <option value="">Sem categoria</option>
-                                        <?php foreach ($categorias as $cat): ?>
-                                            <option value="<?= htmlspecialchars($cat['IDCategoria']) ?>"
-                                                <?= (isset($_POST['categoria_id']) && $_POST['categoria_id'] === $cat['IDCategoria']) ? 'selected' : '' ?>>
-                                                <?= htmlspecialchars($cat['NomeCategoria']) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="subcategoria_id" class="form-label text-light fw-semibold">Subcategoria
-                                        <span class="text-secondary fw-normal small">(opcional)</span></label>
-                                    <select name="subcategoria_id" id="subcategoria_id"
-                                        class="form-select bg-dark border-secondary text-light" disabled>
-                                        <option value="">Selecione a categoria primeiro</option>
-                                    </select>
-                                </div>
+                            <div class="col-6 d-flex align-items-center ps-3">
+                                <i class="bi bi-calendar3 text-secondary-analysis me-2 fs-7"></i>
+                                <input type="date" name="data_registro"
+                                    class="form-control bg-transparent border-0 text-light-analysis px-0 shadow-none fs-7 fw-bold"
+                                    value="<?= htmlspecialchars($_POST['data_registro'] ?? date('Y-m-d')) ?>" required>
                             </div>
+                        </div>
 
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <label for="data_registro" class="form-label text-light fw-semibold">Data da
-                                        Movimentação</label>
-                                    <input type="date" name="data_registro" id="data_registro"
-                                        class="form-control bg-dark border-secondary text-light"
-                                        value="<?= htmlspecialchars($_POST['data_registro'] ?? date('Y-m-d')) ?>" required>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="data_vencimento" class="form-label text-light fw-semibold">Data de
-                                        Vencimento <span class="text-secondary fw-normal small">(opcional)</span></label>
-                                    <input type="date" name="data_vencimento" id="data_vencimento"
-                                        class="form-control bg-dark border-secondary text-light"
-                                        value="<?= htmlspecialchars($_POST['data_vencimento'] ?? '') ?>">
-                                </div>
-                            </div>
+                        <div class="accordion accordion-flush mb-5 border border-border-color rounded-3 overflow-hidden auralis-line-input"
+                            id="accordionMaisDetalhes">
+                            <div class="accordion-item bg-transparent">
+                                <h2 class="accordion-header">
+                                    <button
+                                        class="accordion-button collapsed bg-transparent text-secondary-analysis shadow-none py-2 px-3 small fs-7"
+                                        type="button" data-bs-toggle="collapse" data-bs-target="#collapseDetalhes">
+                                        Mais detalhes (Vencimento, Recorrência)
+                                    </button>
+                                </h2>
+                                <div id="collapseDetalhes" class="accordion-collapse collapse"
+                                    data-bs-parent="#accordionMaisDetalhes">
+                                    <div class="accordion-body border-top border-border-color pt-3 px-3 fs-7 bg-charcoal">
 
-                            <div class="mb-4 p-3 bg-dark rounded-3 border border-secondary-subtle">
-                                <div class="form-check form-switch mb-0">
-                                    <input class="form-check-input" type="checkbox" name="recorrente" id="recorrente"
-                                        <?= isset($_POST['recorrente']) ? 'checked' : '' ?>>
-                                    <label class="form-check-label text-light fw-semibold" for="recorrente">Conta fixa /
-                                        recorrente</label>
-                                    <div class="text-secondary small mt-1">Ex: plano de internet, aluguel, assinatura.</div>
-                                </div>
-                                <div id="bloco_recorrencia" class="mt-3" style="display:none;">
-                                    <label for="dia_vencimento" class="form-label text-light fw-semibold">Todo dia</label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="number" name="dia_vencimento" id="dia_vencimento"
-                                            class="form-control bg-body-tertiary border-secondary text-light"
-                                            style="width:90px;" min="1" max="31" placeholder="Ex: 10"
-                                            value="<?= htmlspecialchars($_POST['dia_vencimento'] ?? '') ?>">
-                                        <span class="text-secondary">de cada mês</span>
+                                        <div class="mb-3">
+                                            <label class="form-label text-secondary-analysis fs-7 mb-1">Data de
+                                                Vencimento</label>
+                                            <input type="date" name="data_vencimento"
+                                                class="form-control bg-dark border-border-color text-light-analysis fs-7">
+                                        </div>
+
+                                        <div class="form-check form-switch mb-2 toggle-analysis toggle-analysis-muted">
+                                            <input class="form-check-input bg-dark border-border-color shadow-none"
+                                                type="checkbox" name="recorrente" id="recorrente">
+                                            <label class="form-check-label text-muted-analysis fs-7" for="recorrente">Conta
+                                                recorrente</label>
+                                        </div>
+
+                                        <div id="bloco_recorrencia" style="display:none;"
+                                            class="ps-4 border-start border-border-color mt-2 bg-charcoal">
+                                            <label class="form-label text-secondary-analysis fs-7 mb-1">Dia do mês</label>
+                                            <input type="number" name="dia_vencimento" id="dia_vencimento"
+                                                class="form-control bg-dark border-border-color text-light-analysis form-control-sm w-50 no-spinners fs-7"
+                                                min="1" max="31" placeholder="Ex: 10">
+                                        </div>
+
                                     </div>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="d-grid">
-                                <button type="submit"
-                                    class="btn btn-primary fw-bold text-dark py-3 fs-5 shadow cardCentral">
-                                    <i class="bi bi-check-circle-fill me-2"></i> Salvar Transação
-                                </button>
-                            </div>
+                        <div class="d-grid mt-2">
+                            <button type="submit"
+                                class="btn btn-primary fw-bold text-dark py-3 rounded-pill fs-6 shadow-lg d-flex align-items-center justify-content-center">
+                                Salvar Transação
+                            </button>
+                        </div>
 
-                        </form>
-                    </div>
+                    </form>
+
+                    <style>
+                        /* 1. Paleta de Cores Auralis Premium Suave / Fintech Dark Slate */
+                        :root {
+                            --primary-gold-analysis: #AA8C2C;
+                            /* Dourado envelhecido suave */
+                            --gold-glow-analysis: rgba(170, 140, 44, 0.3);
+                            --bg-main-analysis: #1F1F1F;
+                            /* Charcoal Slate Suave */
+                            --bg-card-analysis: #2A2A2A;
+                            /* Charcoal Slate Levemente Claro */
+                            --bg-charcoal-analysis: #222222;
+                            /* Charcoal muito suave */
+                            --border-color-analysis: #333333;
+                            /* Cinza escuro suave */
+                            --text-light-analysis: #E0E0E0;
+                            /* Branco quebrado suave */
+                            --text-muted-analysis: #888888;
+                            /* Cinza suave */
+                            --text-gold-analysis: #D4AF37;
+                            /* Aurum para destaque, mas suave */
+                        }
+
+                        /* Aplicação Global das Novas Cores */
+                        .auralis-premium-form .text-light {
+                            color: var(--text-light-analysis) !important;
+                        }
+
+                        .auralis-premium-form .text-secondary {
+                            color: var(--text-muted-analysis) !important;
+                        }
+
+                        .bg-dark {
+                            background-color: var(--bg-charcoal-analysis) !important;
+                        }
+
+                        .card {
+                            background-color: var(--bg-card-analysis) !important;
+                            border-color: var(--border-color-analysis) !important;
+                        }
+
+                        .alert {
+                            background-color: var(--bg-card-analysis) !important;
+                            border-color: var(--border-color-analysis) !important;
+                            color: var(--text-light-analysis) !important;
+                        }
+
+                        .alert-link {
+                            color: var(--primary-gold-analysis) !important;
+                        }
+
+                        .alert-warning .bi-wallet2 {
+                            color: var(--primary-gold-analysis) !important;
+                        }
+
+                        /* 2. Utilitários de Design Line Inputs */
+                        .auralis-form input[type="text"]:focus,
+                        .auralis-form input[type="number"]:focus,
+                        .auralis-form select:focus {
+                            border-color: var(--primary-gold-analysis) !important;
+                            background-color: transparent !important;
+                        }
+
+                        .w-icon {
+                            width: 30px;
+                        }
+
+                        /* Ajuste de alinhamento dos ícones sutis */
+                        .w-icon i {
+                            font-size: 1.25rem;
+                        }
+
+                        /* Tamanho de ícone Bootstrap consistente */
+                        .auralis-line-input {
+                            border-bottom: 1px solid var(--border-color-analysis);
+                            background-color: transparent !important;
+                        }
+
+                        .auralis-line-input .form-control,
+                        .auralis-line-input .form-select {
+                            color: var(--text-light-analysis) !important;
+                        }
+
+                        /* 3. Centralização e Remoção de Spinners de Número */
+                        .no-spinners::-webkit-outer-spin-button,
+                        .no-spinners::-webkit-inner-spin-button {
+                            -webkit-appearance: none;
+                            margin: 0;
+                        }
+
+                        .no-spinners {
+                            -moz-appearance: textfield;
+                            appearance: none;
+                        }
+
+                        /* 4. Tipografia Premium Suave */
+                        .fs-1-large {
+                            font-size: 3rem !important;
+                        }
+
+                        /* Valor muito grande, centralizado */
+                        .fs-6 {
+                            font-size: 1rem !important;
+                        }
+
+                        /* Texto padrão, negrito sutil */
+                        .fs-7 {
+                            font-size: 0.875rem !important;
+                        }
+
+                        /* Texto pequeno */
+                        .fw-bold {
+                            font-weight: 700 !important;
+                        }
+
+                        /* Negrito sutil */
+                        .fw-semibold {
+                            font-weight: 600 !important;
+                        }
+
+                        /* Negrito sutil */
+
+                        /* 5. Estilo de Toggle Switch Premium */
+                        .toggle-analysis .form-check-input {
+                            border-color: var(--border-color-analysis);
+                        }
+
+                        .toggle-analysis .form-check-input:checked {
+                            background-color: var(--primary-gold-analysis);
+                            border-color: var(--primary-gold-analysis);
+                        }
+
+                        .toggle-analysis .form-check-input:focus {
+                            border-color: var(--primary-gold-analysis);
+                            box-shadow: 0 0 0 0.25rem var(--gold-glow-analysis);
+                        }
+
+                        /* Toggle muted para detalhes */
+                        .toggle-analysis-muted .form-check-input:checked {
+                            opacity: 0.6;
+                        }
+
+                        /* 6. Outros Ajustes do Protótipo */
+                        .form-select.shadow-none:focus {
+                            border-color: transparent !important;
+                        }
+
+                        .auralis-line-input select option {
+                            background-color: var(--bg-card-analysis);
+                            color: var(--text-light-analysis);
+                        }
+
+                        .no-spinners {
+                            padding-left: 2rem !important;
+                        }
+
+                        /* Compensa a centralização p/ placeholder */
+
+                        /* Botão Primary Refinado Dourado/Charcoal */
+                        .btn-gold {
+                            background: linear-gradient(135deg, #FFB800 0%, #D4AF37 100%);
+                            border: none;
+                            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);
+                        }
+
+                        .btn-gold:hover {
+                            background: linear-gradient(135deg, #FFD04F 0%, #E7C665 100%);
+                            color: #000;
+                            box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+                        }
+
+                        /* Efeito sutil dos ícones */
+                        .w-icon .bi {
+                            transition: all 0.3s ease;
+                        }
+
+                        .auralis-premium-form input:focus~i.text-muted,
+                        .auralis-premium-form select:focus~i.text-muted {
+                            color: var(--primary-gold-analysis) !important;
+                            opacity: 0.8;
+
+                        }
+                        .badge-tipo {
+    background: linear-gradient(135deg, #2a2a2a, #1f1f1f);
+    border: 1px solid var(--border-color-analysis);
+    font-size: 1rem;
+    min-width: 180px;
+    transition: all 0.25s ease;
+}
+
+.badge-tipo:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+                    </style>
+
+                    <script>
+                        // UX INTELIGENTE: Muda apenas o visual do texto do Status e Toggle
+                        const toggleStatus = document.getElementById('toggle_status');
+                        const inputReal = document.getElementById('status_real');
+                        const textoStatus = document.getElementById('texto_status');
+                        const tipoAtual = "<?= $tipo_sugerido ?>"; // Receita ou Despesa vindo do PHP
+
+                        toggleStatus.addEventListener('change', function () {
+                            if (this.checked) {
+                                inputReal.value = 'efetivado';
+                                textoStatus.innerText = 'Foi ' + (tipoAtual === 'receita' ? 'recebido' : 'pago');
+                                textoStatus.classList.replace('text-secondary', 'text-light');
+                            } else {
+                                inputReal.value = 'pendente';
+                                textoStatus.innerText = 'Não ' + (tipoAtual === 'receita' ? 'recebido' : 'pago') + ' ainda';
+                                textoStatus.classList.replace('text-light', 'text-secondary');
+                            }
+                        });
+
+                        // Recorrência
+                        const checkRecorrente = document.getElementById('recorrente');
+                        const blocoRecorrencia = document.getElementById('bloco_recorrencia');
+                        const inputDia = document.getElementById('dia_vencimento');
+
+                        checkRecorrente.addEventListener('change', function () {
+                            blocoRecorrencia.style.display = this.checked ? 'block' : 'none';
+                            inputDia.required = this.checked;
+                        });
+                    </script>
+
+                    <style>
+                        /* Estilos extras para deixar os inputs transparentes bonitos */
+                        .auralis-form input[type="text"]:focus,
+                        .auralis-form input[type="number"]:focus,
+                        .auralis-form select:focus {
+                            border-color: var(--gold-primary) !important;
+                        }
+
+                        .w-20px {
+                            width: 30px;
+                        }
+
+                        /* Ajuste de alinhamento dos ícones */
+                    </style>
                 </div>
 
             <?php endif; ?>
@@ -319,7 +554,7 @@ require_once 'geral/header.php';
     checkRecorrente.addEventListener('change', toggleRecorrencia);
     toggleRecorrencia();
 
-    // AJAX — Subcategorias (Apenas se precisar, a Categoria agora já vem carregada do PHP)
+    // AJAX — Subcategorias
     const selectCategoria = document.getElementById('categoria_id');
     const selectSubCategoria = document.getElementById('subcategoria_id');
 
