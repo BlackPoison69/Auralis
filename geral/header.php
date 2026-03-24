@@ -29,8 +29,10 @@ if (session_status() === PHP_SESSION_NONE) {
         style="background-color: rgba(18, 20, 24, 0.85); backdrop-filter: blur(12px);">
         <div class="container">
 
-            <a class="navbar-brand fw-bold text-primary fs-3 d-flex align-items-center" href="/Auralis/geral/index.php">
-                <i class="bi bi-hexagon-half me-2"></i>Aura<span class="text-light">lis</span>
+            <a class="navbar-brand fw-bold fs-3 d-flex align-items-center" href="/Auralis/geral/index.php"
+                style="letter-spacing: -0.05em;">
+                <i style=" color: gold !important;" class="bi bi-hexagon-half text-primary me-2"></i>
+                <span style="color: gold !important;" class="text-primary">Aura</span><span class="text-light">lis</span>
             </a>
 
             <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse"
@@ -46,11 +48,7 @@ if (session_status() === PHP_SESSION_NONE) {
                         <a class="nav-link custom-link px-3" href="/Auralis/geral/index.php">Início</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link custom-link px-3"
-                            href="/Auralis/geral/index.php#como-funciona">Funcionalidades</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link custom-link px-3" href="/Auralis/geral/sobre.php">Sobre nós</a>
+                        <a class="nav-link custom-link px-3" href="/Auralis/geral/sobre.php#título">Sobre nós</a>
                     </li>
                 </ul>
 
