@@ -1,5 +1,4 @@
 <?php
-// O header precisa iniciar a sessão no topo para conseguir ler os dados do usuário
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -27,14 +26,14 @@ if (session_status() === PHP_SESSION_NONE) {
 
 <body class="d-flex flex-column min-vh-100">
 
-    <nav class="navbar navbar-expand-lg border-bottom border-secondary-subtle sticky-top shadow-sm"
+<nav class="navbar navbar-expand-lg border-bottom border-secondary-subtle sticky-top shadow-sm"
         style="background-color: rgba(18, 20, 24, 0.85); backdrop-filter: blur(12px);">
         <div class="container">
 
             <a class="navbar-brand fw-bold fs-3 d-flex align-items-center" href="/Auralis/geral/index.php"
                 style="letter-spacing: -0.05em;">
-                <i style=" color: gold !important;" class="bi bi-hexagon-half text-primary me-2"></i>
-                <span style="color: gold !important;" class="text-primary">Aura</span><span class="text-light">lis</span>
+                <i style="color: gold !important;" class="bi bi-hexagon-half me-2"></i>
+                <span style="color: gold !important;">Aura</span><span class="text-light">lis</span>
             </a>
 
             <button class="navbar-toggler border-0 shadow-none" type="button" data-bs-toggle="collapse"
@@ -46,12 +45,26 @@ if (session_status() === PHP_SESSION_NONE) {
             <div class="collapse navbar-collapse" id="navbarNav">
 
                 <ul class="navbar-nav mx-auto mb-2 mb-lg-0 fw-medium gap-2 mt-3 mt-lg-0 text-center">
-                    <li class="nav-item">
-                        <a class="nav-link custom-link px-3" href="/Auralis/geral/index.php">Início</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link custom-link px-3" href="/Auralis/geral/sobre.php#título">Sobre nós</a>
-                    </li>
+                    
+                    <?php if (isset($_SESSION['usuario_id'])): ?>
+                        <li class="nav-item">
+                            <a class="nav-link custom-link px-3" href="/Auralis/dashboard.php">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link custom-link px-3" href="/Auralis/nova_transacao.php">Nova Transação</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link custom-link px-3" href="/Auralis/gerenciar_categorias.php">Categorias</a>
+                        </li>
+                    <?php else: ?>
+                        <li class="nav-item">
+                            <a class="nav-link custom-link px-3" href="/Auralis/geral/index.php">Início</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link custom-link px-3" href="/Auralis/geral/sobre.php#título">Sobre nós</a>
+                        </li>
+                    <?php endif; ?>
+
                 </ul>
 
                 <div class="d-flex flex-column flex-lg-row gap-3 align-items-center mt-3 mt-lg-0">
@@ -67,31 +80,31 @@ if (session_status() === PHP_SESSION_NONE) {
                                 <span class="me-2 d-none d-md-inline text-muted">Olá,
                                     <strong class="text-light"><?= htmlspecialchars($primeiroNome); ?></strong>
                                 </span>
-                                <i class="bi bi-person-circle fs-4 text-primary cardCentral"></i>
+                                <i style="color: gold !important;" class="bi bi-person-circle fs-4 cardCentral"></i>
                             </a>
 
-                            <ul class="dropdown-menu dropdown-menu-end shadow-lg border border-secondary-subtle mt-2"
+                            <ul class="dropdown-menu dropdown-menu-end shadow-lg border border-secondary-subtle mt-2 bg-dark"
                                 aria-labelledby="menuUsuario">
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center py-2" href="/Auralis/dashboard.php">
-                                        <i class="bi bi-speedometer2 me-2 text-primary"></i> Meu Painel
+                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="/Auralis/dashboard.php">
+                                        <i class="bi bi-speedometer2 me-2" style="color: gold;"></i> Meu Painel
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center py-2" href="#">
-                                        <i class="bi bi-wallet2 me-2 text-primary"></i> Minhas Carteiras
+                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="#">
+                                        <i class="bi bi-wallet2 me-2" style="color: gold;"></i> Minhas Carteiras
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center py-2" href="#">
-                                        <i class="bi bi-gear me-2 text-primary"></i> Configurações
+                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="#">
+                                        <i class="bi bi-gear me-2" style="color: gold;"></i> Configurações
                                     </a>
                                 </li>
                                 <li>
                                     <hr class="dropdown-divider border-secondary-subtle">
                                 </li>
                                 <li>
-                                    <a class="dropdown-item d-flex align-items-center py-2 text-danger custom-link"
+                                    <a class="dropdown-item d-flex align-items-center py-2 text-danger custom-link transition-hover"
                                         href="/Auralis/usuario/logout.php">
                                         <i class="bi bi-box-arrow-right me-2"></i> Sair
                                     </a>
@@ -103,7 +116,7 @@ if (session_status() === PHP_SESSION_NONE) {
                         <a href="/Auralis/usuario/login.php"
                             class="btn btn-link text-light text-decoration-none custom-link px-3">Login</a>
                         <a href="/Auralis/usuario/cadastro.php"
-                            class="btn btn-primary px-4 rounded-pill fw-bold shadow-sm cardCentral">Criar Conta</a>
+                            class="btn px-4 rounded-pill fw-bold shadow-sm cardCentral" style="background-color: gold; color: #121418;">Criar Conta</a>
                     <?php endif; ?>
 
                 </div>
