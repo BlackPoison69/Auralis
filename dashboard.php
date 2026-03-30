@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } catch (PDOException $e) {}
     }
 
-    // LÓGICA DO AJUSTE DE SALDO INTELIGENTE (NOVO!)
+    // LÓGICA DO AJUSTE DE SALDO INTELIGENTE
     if ($_POST['action'] === 'ajustar_saldo') {
         $saldo_informado = (float) str_replace(',', '.', $_POST['saldo_real']);
         $saldo_sistema = (float) $_POST['saldo_sistema_atual'];
@@ -107,7 +107,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 exit;
             } catch (PDOException $e) {}
         } else {
-            // Se o valor for o mesmo, só recarrega a página
             header("Location: " . $redirectBase);
             exit;
         }
@@ -184,19 +183,19 @@ if ($carteira_selecionada) {
             $despesasMes = (float) $resultMes['total_despesas'];
         }
 
-        // 3. Busca Transações
+        // 3. Busca Transações (AGORA PUXANDO O ÍCONE TAMBÉM)
         $sqlTransacoes = '
             SELECT 
                 r."IDRegistro", r."MomentoRegistro", r."Valor", r."Descricao", r."TipoRegistro", r."StatusRegistro",
                 r."DataVencimento", r."Recorrente", r."DiaVencimento",
-                c."NomeCategoria"
+                c."NomeCategoria", c."IconeCategoria"
             FROM "Registro" r
             LEFT JOIN "Categoria" c ON r."FKCategoria" = c."IDCategoria"
             WHERE r."FKCarteira" = :carteira_id 
               AND r."FKUsuario" = :usuario_id
               AND EXTRACT(MONTH FROM r."MomentoRegistro") = :mes
               AND EXTRACT(YEAR FROM r."MomentoRegistro") = :ano
-            ORDER BY r."MomentoRegistro" DESC
+            ORDER BY r."MomentoRegistro" DESC, r."created_at" DESC
             LIMIT 50
         ';
         $stmtTrans = $pdo->prepare($sqlTransacoes);
@@ -402,7 +401,10 @@ require_once 'geral/header.php';
                                     </div>
                                 </td>
                                 <td class="py-3 border-secondary-subtle text-secondary small">
-                                    <?= htmlspecialchars($t['NomeCategoria'] ?? 'Sem categoria') ?>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi <?= htmlspecialchars($t['IconeCategoria'] ?? 'bi-tag') ?> me-2 fs-6"></i>
+                                        <span><?= htmlspecialchars($t['NomeCategoria'] ?? 'Sem categoria') ?></span>
+                                    </div>
                                 </td>
                                 <td class="py-3 border-secondary-subtle text-secondary small">
                                     <?= $dataFormatada ?>
@@ -528,5 +530,14 @@ require_once 'geral/header.php';
     .no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .no-spinners { -moz-appearance: textfield; }
 </style>
-
+<script>
+    // UX INTELIGENTE: Limpa a URL para evitar que a mensagem de sucesso repita no F5
+    if (window.history.replaceState) {
+        const url = new URL(window.location);
+        if (url.searchParams.has('sucesso')) {
+            url.searchParams.delete('sucesso');
+            window.history.replaceState({path: url.href}, '', url.href);
+        }
+    }
+</script>
 <?php require_once 'geral/footer.php'; ?>
