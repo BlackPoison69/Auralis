@@ -53,9 +53,6 @@ if (session_status() === PHP_SESSION_NONE) {
                             <a class="nav-link custom-link px-3" href="/Auralis/dashboard.php">Dashboard</a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link custom-link px-3" href="/Auralis/nova_transacao.php">Nova Transação</a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link custom-link px-3" href="/Auralis/gerenciar_categorias.php">Categorias</a>
                         </li>
                     <?php else: ?>

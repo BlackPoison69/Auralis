@@ -28,7 +28,6 @@ $totalCarteiras = count($carteiras);
 $mes_atual = isset($_GET['mes']) ? (int)$_GET['mes'] : (int)date('m');
 $ano_atual = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
 
-// Cálculo para os botões Voltar/Avançar
 $mes_ant = $mes_atual - 1; $ano_ant = $ano_atual;
 if ($mes_ant < 1) { $mes_ant = 12; $ano_ant--; }
 
@@ -39,23 +38,79 @@ $meses_pt = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 =>
 $nome_mes = $meses_pt[$mes_atual];
 
 
-// --- LÓGICA DE AÇÃO: ALTERAR STATUS ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_status') {
-    $id_registro = $_POST['registro_id'];
-    $novo_status = $_POST['novo_status'];
+// --- LÓGICA DE AÇÃO: ALTERAR STATUS, EXCLUIR OU AJUSTAR SALDO ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+    
+    $carteira_url = isset($_GET['carteira']) ? "&carteira=" . $_GET['carteira'] : "";
+    $redirectBase = "dashboard.php?mes={$mes_atual}&ano={$ano_atual}{$carteira_url}";
 
-    if (in_array($novo_status, ['pendente', 'efetivado'])) {
+    // LÓGICA DE STATUS
+    if ($_POST['action'] === 'toggle_status') {
+        $id_registro = $_POST['registro_id'];
+        $novo_status = $_POST['novo_status'];
+        if (in_array($novo_status, ['pendente', 'efetivado'])) {
+            try {
+                $sqlToggle = 'UPDATE "Registro" SET "StatusRegistro" = :status WHERE "IDRegistro" = :id AND "FKUsuario" = :uid';
+                $stmtToggle = $pdo->prepare($sqlToggle);
+                $stmtToggle->execute([':status' => $novo_status, ':id' => $id_registro, ':uid' => $usuario_id]);
+                header("Location: " . $redirectBase);
+                exit;
+            } catch (PDOException $e) {}
+        }
+    }
+
+    // LÓGICA DE EXCLUSÃO
+    if ($_POST['action'] === 'excluir_registro') {
+        $id_registro = $_POST['registro_id'];
         try {
-            $sqlToggle = 'UPDATE "Registro" SET "StatusRegistro" = :status WHERE "IDRegistro" = :id AND "FKUsuario" = :uid';
-            $stmtToggle = $pdo->prepare($sqlToggle);
-            $stmtToggle->execute([':status' => $novo_status, ':id' => $id_registro, ':uid' => $usuario_id]);
-            
-            // Mantém os filtros ao recarregar
-            $redirectUrl = "dashboard.php?mes={$mes_atual}&ano={$ano_atual}";
-            if (isset($_GET['carteira'])) $redirectUrl .= "&carteira=" . $_GET['carteira'];
-            header("Location: " . $redirectUrl);
+            $sqlDel = 'DELETE FROM "Registro" WHERE "IDRegistro" = :id AND "FKUsuario" = :uid';
+            $stmtDel = $pdo->prepare($sqlDel);
+            $stmtDel->execute([':id' => $id_registro, ':uid' => $usuario_id]);
+            header("Location: " . $redirectBase . "&sucesso=excluido");
             exit;
         } catch (PDOException $e) {}
+    }
+
+    // LÓGICA DO AJUSTE DE SALDO INTELIGENTE (NOVO!)
+    if ($_POST['action'] === 'ajustar_saldo') {
+        $saldo_informado = (float) str_replace(',', '.', $_POST['saldo_real']);
+        $saldo_sistema = (float) $_POST['saldo_sistema_atual'];
+        $carteira_id_ajuste = $_POST['carteira_id_ajuste'];
+
+        $diferenca = $saldo_informado - $saldo_sistema;
+
+        // Só faz algo se houver diferença
+        if (abs($diferenca) > 0.009) { 
+            $tipoRegistro = ($diferenca > 0) ? 'receita' : 'despesa';
+            $valorRegistro = abs($diferenca);
+            $descricao = ($saldo_sistema == 0) ? 'Saldo Inicial' : 'Ajuste de Saldo';
+            
+            try {
+                $sqlAjuste = '
+                    INSERT INTO "Registro" (
+                        "TipoRegistro", "Valor", "Descricao", "MomentoRegistro",
+                        "StatusRegistro", "FKCarteira", "FKUsuario"
+                    ) VALUES (
+                        :tipo, :valor, :descricao, CURRENT_DATE,
+                        \'efetivado\', :carteira, :usuario
+                    )
+                ';
+                $stmtAjuste = $pdo->prepare($sqlAjuste);
+                $stmtAjuste->execute([
+                    ':tipo' => $tipoRegistro,
+                    ':valor' => $valorRegistro,
+                    ':descricao' => $descricao,
+                    ':carteira' => $carteira_id_ajuste,
+                    ':usuario' => $usuario_id
+                ]);
+                header("Location: " . $redirectBase . "&sucesso=ajustado");
+                exit;
+            } catch (PDOException $e) {}
+        } else {
+            // Se o valor for o mesmo, só recarrega a página
+            header("Location: " . $redirectBase);
+            exit;
+        }
     }
 }
 
@@ -74,7 +129,6 @@ foreach ($carteiras as $cart) {
     }
 }
 
-// Constrói os links de navegação mantendo a carteira selecionada
 $link_ant = "?mes={$mes_ant}&ano={$ano_ant}" . ($carteira_selecionada ? "&carteira={$carteira_selecionada}" : "");
 $link_prox = "?mes={$mes_prox}&ano={$ano_prox}" . ($carteira_selecionada ? "&carteira={$carteira_selecionada}" : "");
 
@@ -86,7 +140,7 @@ $transacoes = [];
 
 if ($carteira_selecionada) {
     try {
-        // 1. Saldo Histórico (Todo o dinheiro real da conta até hoje)
+        // 1. Saldo Histórico
         $sqlSaldo = '
             SELECT 
                 COALESCE(SUM(CASE WHEN "TipoRegistro" = \'receita\' THEN "Valor" ELSE 0 END), 0) as total_rec_hist,
@@ -104,7 +158,7 @@ if ($carteira_selecionada) {
             $saldoAtual = (float)$resultSaldo['total_rec_hist'] - (float)$resultSaldo['total_des_hist'];
         }
 
-        // 2. Calcula Receitas/Despesas FILTRANDO PELO MÊS E ANO SELECIONADOS
+        // 2. Receitas/Despesas do Mês
         $sqlMes = '
             SELECT 
                 COALESCE(SUM(CASE WHEN "TipoRegistro" = \'receita\' THEN "Valor" ELSE 0 END), 0) as total_receitas,
@@ -130,7 +184,7 @@ if ($carteira_selecionada) {
             $despesasMes = (float) $resultMes['total_despesas'];
         }
 
-        // 3. Busca as Transações DO MÊS SELECIONADO
+        // 3. Busca Transações
         $sqlTransacoes = '
             SELECT 
                 r."IDRegistro", r."MomentoRegistro", r."Valor", r."Descricao", r."TipoRegistro", r."StatusRegistro",
@@ -158,7 +212,6 @@ if ($carteira_selecionada) {
 }
 
 require_once 'geral/header.php';
-$primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
 ?>
 
 <main class="container py-4 mt-3 flex-grow-1" style="min-height: 100vh;">
@@ -180,28 +233,40 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
         </div>
     <?php else: ?>
 
+        <?php if (isset($_GET['sucesso'])): ?>
+            <?php 
+                $msg = '';
+                if ($_GET['sucesso'] === 'registro') $msg = 'Transação salva com sucesso!';
+                if ($_GET['sucesso'] === 'editado') $msg = 'Transação atualizada com sucesso!';
+                if ($_GET['sucesso'] === 'excluido') $msg = 'Transação excluída!';
+                if ($_GET['sucesso'] === 'ajustado') $msg = 'Saldo da carteira ajustado com sucesso!';
+            ?>
+            <?php if($msg): ?>
+            <div class="alert alert-success d-flex align-items-center gap-2 rounded-3 shadow-sm border-0 bg-success bg-opacity-10 text-success fw-semibold alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle-fill"></i> <span><?= $msg ?></span>
+                <button type="button" class="btn-close btn-close-white opacity-50" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            <?php endif; ?>
+        <?php endif; ?>
+
         <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary-subtle pb-3 flex-wrap gap-3">
             <div class="d-flex align-items-center gap-4">
                 <h2 class="fw-bold text-light mb-0">Visão Geral</h2>
                 
-
-
-                
                 <div class="d-flex align-items-center bg-dark border border-secondary-subtle rounded-pill px-2 py-1 shadow-sm">
-<a href="<?= $link_ant ?>" class="btn btn-sm btn-link text-white transition-hover text-decoration-none">
-    <i class="bi bi-chevron-left"></i>
-</a>
-
-<span class="text-light fw-semibold px-3" style="min-width: 130px; text-align: center;">
-    <?= $nome_mes ?> <?= $ano_atual ?>
-</span>
-
-<a href="<?= $link_prox ?>" class="btn btn-sm btn-link text-white transition-hover text-decoration-none">
-    <i class="bi bi-chevron-right"></i>
-</a>
+                    <a href="<?= $link_ant ?>" class="btn btn-sm btn-link text-light opacity-75 transition-hover text-decoration-none fs-5 d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                        <i class="bi bi-caret-left-fill"></i>
+                    </a>
+                    
+                    <span class="text-light fw-bold px-2" style="min-width: 140px; text-align: center; font-size: 0.95rem;">
+                        <?= $nome_mes ?> <?= $ano_atual ?>
+                    </span>
+                    
+                    <a href="<?= $link_prox ?>" class="btn btn-sm btn-link text-light opacity-75 transition-hover text-decoration-none fs-5 d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;">
+                        <i class="bi bi-caret-right-fill"></i>
+                    </a>
                 </div>
             </div>
-
 
             <div class="d-flex gap-2">
                 <div class="d-flex align-items-center gap-3">
@@ -235,9 +300,21 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
         <div class="row g-4 mb-5">
             <div class="col-md-4">
                 <div class="card bg-body-tertiary border-secondary-subtle shadow-sm h-100 rounded-4">
-                    <div class="card-body p-4">
+                    <div class="card-body p-4 position-relative">
+                        <style>
+                            .inferiorDireito{
+                                position: absolute;
+                                bottom: 10px;
+                                right: 10px;
+                            }
+                        </style>
+                        <button class="btn btn-sm btn-outline-secondary position-absolute inferiorDireito m-3 rounded-pill transition-hover border-0 shadow-none" 
+                                data-bs-toggle="modal" data-bs-target="#modalAjusteSaldo" title="Ajustar Saldo Real">
+                            <i class="bi bi-pencil-square fs-5"></i>
+                        </button>
+
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="card-title text-secondary mb-0 fw-semibold">Saldo: <?= htmlspecialchars($nome_carteira_atual); ?></h6>
+                            <h6 class="card-title text-secondary mb-0 fw-semibold pe-4">Saldo: <?= htmlspecialchars($nome_carteira_atual); ?></h6>
                             <div class="p-2 bg-primary bg-opacity-10 rounded-3">
                                 <i class="bi bi-wallet2 text-primary fs-5"></i>
                             </div>
@@ -359,30 +436,35 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                                                     </span>
                                                 </div>
                                             </div>
+                                            
                                             <div class="d-flex gap-2">
-                                                <form method="POST" action="">
+                                                <form method="POST" action="" class="m-0">
                                                     <input type="hidden" name="action" value="toggle_status">
                                                     <input type="hidden" name="registro_id" value="<?= $t['IDRegistro'] ?>">
-
                                                     <?php if ($isPendente): ?>
                                                         <input type="hidden" name="novo_status" value="efetivado">
                                                         <button type="submit" class="btn btn-sm btn-outline-success rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1">
-                                                            <i class="bi bi-check-circle"></i>
-                                                            <?= $textoAcaoStatus ?>
+                                                            <i class="bi bi-check-circle"></i> <?= $textoAcaoStatus ?>
                                                         </button>
                                                     <?php else: ?>
                                                         <input type="hidden" name="novo_status" value="pendente">
                                                         <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1">
-                                                            <i class="bi bi-arrow-counterclockwise"></i>
-                                                            Desfazer
+                                                            <i class="bi bi-arrow-counterclockwise"></i> Desfazer
                                                         </button>
                                                     <?php endif; ?>
                                                 </form>
 
-                                                <button class="btn btn-sm btn-outline-warning rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1 transition-hover">
-                                                    <i class="bi bi-pencil-square"></i>
-                                                    Editar
-                                                </button>
+                                                <a href="nova_transacao.php?editar=<?= $t['IDRegistro'] ?>" class="btn btn-sm btn-outline-warning rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1 transition-hover">
+                                                    <i class="bi bi-pencil-square"></i> Editar
+                                                </a>
+                                                
+                                                <form method="POST" action="" class="m-0" onsubmit="return confirm('Tem certeza que deseja excluir esta transação? A ação não pode ser desfeita.');">
+                                                    <input type="hidden" name="action" value="excluir_registro">
+                                                    <input type="hidden" name="registro_id" value="<?= $t['IDRegistro'] ?>">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1 transition-hover">
+                                                        <i class="bi bi-trash3"></i> Excluir
+                                                    </button>
+                                                </form>
                                             </div>
                                         </div>
                                     </div>
@@ -399,10 +481,52 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
 
 </main>
 
+<div class="modal fade" id="modalAjusteSaldo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark border-secondary-subtle shadow-lg rounded-4">
+            <div class="modal-header border-bottom border-secondary-subtle">
+                <h5 class="modal-title text-light fw-bold">
+                    <i class="bi bi-sliders me-2 text-primary" style="color: var(--primary-gold-analysis) !important;"></i> Ajustar Saldo Real
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body p-4">
+                    <p class="text-secondary small mb-4">
+                        Se o saldo do aplicativo estiver diferente do saldo do seu banco, informe o valor real abaixo. O Auralis criará um registro de ajuste automático para corrigir a diferença.
+                    </p>
+                    
+                    <input type="hidden" name="action" value="ajustar_saldo">
+                    <input type="hidden" name="carteira_id_ajuste" value="<?= $carteira_selecionada ?>">
+                    <input type="hidden" name="saldo_sistema_atual" value="<?= $saldoAtual ?>">
+
+                    <div class="mb-3">
+                        <label class="form-label text-secondary small">Qual o seu saldo exato hoje?</label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-transparent border-secondary-subtle text-light fw-bold">R$</span>
+                            <input type="number" step="0.01" name="saldo_real" class="form-control bg-transparent border-secondary-subtle text-light fw-bold shadow-none no-spinners" required placeholder="0,00" value="<?= number_format($saldoAtual, 2, '.', '') ?>" autofocus>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-top border-secondary-subtle d-flex justify-content-between">
+                    <button type="button" class="btn btn-link text-secondary text-decoration-none" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn fw-bold text-dark px-4 rounded-pill" style="background: linear-gradient(135deg, #FFB800 0%, #D4AF37 100%);">
+                        Corrigir Saldo
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <style>
     .bg-charcoal-analysis { background-color: #1a1d21; }
     .auralis-table > tbody > tr.cursor-pointer:hover > td { background-color: rgba(255, 255, 255, 0.03) !important; }
     .table-active { background-color: #1a1d21 !important; }
+    
+    .no-spinners::-webkit-outer-spin-button,
+    .no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .no-spinners { -moz-appearance: textfield; }
 </style>
 
 <?php require_once 'geral/footer.php'; ?>
