@@ -13,46 +13,7 @@ $usuario_id = $_SESSION['usuario_id'];
 $sucesso = null;
 $erro = null;
 
-// --- 1.1 VERIFICA E CRIA O KIT INICIAL COM ÍCONES (Auto-População) ---
-$sqlCheck = 'SELECT COUNT(*) FROM "Categoria" WHERE "FKUsuario" = :uid';
-$stmtCheck = $pdo->prepare($sqlCheck);
-$stmtCheck->execute([':uid' => $usuario_id]);
-$qtdCategorias = $stmtCheck->fetchColumn();
 
-if ($qtdCategorias == 0) {
-    // O Kit Inicial Padrão do Auralis (8 Categorias Essenciais)
-    // Usando nomes de ícones do Bootstrap Icons (bi-...)
-    $kitInicial = [
-        ['nome' => 'Alimentação', 'tipo' => 'despesa', 'icone' => 'bi-cart3'],
-        ['nome' => 'Moradia',     'tipo' => 'despesa', 'icone' => 'bi-house-door'],
-        ['nome' => 'Transporte',  'tipo' => 'despesa', 'icone' => 'bi-car-front'],
-        ['nome' => 'Saúde',       'tipo' => 'despesa', 'icone' => 'bi-heart-pulse'],
-        ['nome' => 'Lazer',       'tipo' => 'despesa', 'icone' => 'bi-controller'],
-        ['nome' => 'Salário',     'tipo' => 'receita', 'icone' => 'bi-cash-stack'],
-        ['nome' => 'Investimentos','tipo' => 'receita', 'icone' => 'bi-graph-up-arrow'],
-        ['nome' => 'Outras Entradas','tipo' => 'receita', 'icone' => 'bi-plus-circle-dotted']
-    ];
-
-    try {
-        $sqlInsertDefault = 'INSERT INTO "Categoria" ("NomeCategoria", "TipoCategoria", "IconeCategoria", "FKUsuario") VALUES (:nome, :tipo, :icone, :uid)';
-        $stmtDefault = $pdo->prepare($sqlInsertDefault);
-        
-        foreach ($kitInicial as $cat) {
-            $stmtDefault->execute([
-                ':nome'  => $cat['nome'],
-                ':tipo'  => $cat['tipo'],
-                ':icone' => $cat['icone'],
-                ':uid'   => $usuario_id
-            ]);
-        }
-        
-        // PRG: Redireciona para exibir a lista e evitar duplicação
-        header("Location: gerenciar_categorias.php?sucesso=kit_criado");
-        exit;
-    } catch (PDOException $e) {
-        $erro = "Erro ao gerar categorias iniciais. Verifique se a coluna 'IconeCategoria' existe no Supabase.";
-    }
-}
 
 // Mensagens de Sucesso da URL
 if (isset($_GET['sucesso'])) {
@@ -134,11 +95,27 @@ try {
 require_once 'geral/header.php';
 
 // Lista de ícones disponíveis para o usuário escolher manualmente
+// Lista de ícones premium expandida (40 ícones para um grid 8x5 perfeito)
 $listaIcones = [
-    'bi-cart3', 'bi-house-door', 'bi-car-front', 'bi-heart-pulse', 'bi-controller',
-    'bi-airplane', 'bi-bag-heart', 'bi-book', 'bi-cup-hot', 'bi-basket',
-    'bi-lightning-charge', 'bi-phone', 'bi-scissors', 'bi-tools', 'bi-gift',
-    'bi-bank', 'bi-cash-stack', 'bi-piggy-bank', 'bi-wallet2', 'bi-graph-up-arrow'
+    // 1. Alimentação e Casa
+    'bi-cart3', 'bi-basket', 'bi-cup-hot', 'bi-shop', 'bi-house-door',
+    'bi-lightning-charge', 'bi-droplet', 'bi-wifi', 'bi-wrench', 'bi-tools',
+
+    // 2. Transporte e Viagens
+    'bi-car-front', 'bi-fuel-pump', 'bi-bus-front', 'bi-bicycle', 'bi-airplane',
+
+    // 3. Saúde e Lazer
+    'bi-heart-pulse', 'bi-capsule', 'bi-controller', 'bi-film', 'bi-music-note-beamed',
+
+    // 4. Pessoal e Educação
+    'bi-bag-heart', 'bi-scissors', 'bi-sunglasses', 'bi-book', 'bi-mortarboard',
+
+    // 5. Família, Pets e Tech
+    'bi-people', 'bi-gift', 'bi-balloon', 'bi-laptop', 'bi-phone',
+
+    // 6. Finanças e Trabalho
+    'bi-briefcase', 'bi-bank', 'bi-cash-stack', 'bi-coin', 'bi-piggy-bank',
+    'bi-wallet2', 'bi-graph-up-arrow', 'bi-shield-check', 'bi-gear-fill', 'bi-three-dots'
 ];
 ?>
 
@@ -330,10 +307,13 @@ $listaIcones = [
     .fs-7 { font-size: 0.85rem; }
 
     /* Estilos do Grid de Ícones Premium */
-    .icon-selector-grid {
+.icon-selector-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
         gap: 8px;
+        /* ADICIONE ESTAS DUAS LINHAS SE QUISER SCROLL: */
+        max-height: 250px; 
+        overflow-y: auto;
     }
     .btn-icon-select {
         display: flex;

@@ -1,11 +1,10 @@
 <?php
-// 1. Puxa a conexão com o banco (voltando uma pasta para entrar em config)
+// 1. Puxa a conexão com o banco
 require_once '../config/conexao.php';
 
-// Verifica se os dados realmente vieram de um formulário (método POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // 2. Receber e limpar os dados digitados (remove espaços em branco nas pontas)
+        // 2. Receber e limpar os dados
         $nome           = trim($_POST['nome']);
         $documento      = trim($_POST['documento']);
         $nascimento     = trim($_POST['nascimento']);
@@ -14,68 +13,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $senha          = $_POST['senha'];
         $confirma_senha = $_POST['confirma_senha'];
 
-        // 3. Validação de segurança básica: As senhas batem?
         if ($senha !== $confirma_senha) {
-            die("Erro: As senhas não conferem. Por favor, volte e tente novamente.");
+            die("Erro: As senhas não conferem.");
         }
 
-        // 4. Lógica Inteligente: É Pessoa Física ou Jurídica?
-        // Se o documento tiver mais de 14 caracteres (contando pontos e traços), é CNPJ.
         $tipoPessoa = (strlen($documento) > 14) ? 'PJ' : 'PF';
-
-        // 5. Criptografia nível bancário para a senha (NUNCA salvar senha em texto puro)
         $senhaHash = password_hash($senha, PASSWORD_DEFAULT);
-
-        // Nível de acesso padrão para quem cria a conta
         $nivelAcesso = 'Titular';
 
-        // 6. Preparar o comando SQL de Inserção (Blindado contra SQL Injection)
-        // Usamos aspas duplas nas colunas porque o PostgreSQL difere maiúsculas de minúsculas
+        // 3. Inserção do Usuário com RETURNING para pegar o ID gerado na hora
         $sql = "INSERT INTO \"Usuario\" (
-                    \"Nome\", 
-                    \"Documento\", 
-                    \"DataNascimento\", 
-                    \"Telefone\", 
-                    \"Email\", 
-                    \"Senha\", 
-                    \"TipoPessoa\", 
-                    \"NivelAcesso\"
+                    \"Nome\", \"Documento\", \"DataNascimento\", \"Telefone\", \"Email\", \"Senha\", \"TipoPessoa\", \"NivelAcesso\"
                 ) VALUES (
-                    :nome, 
-                    :documento, 
-                    :nascimento, 
-                    :telefone, 
-                    :email, 
-                    :senha, 
-                    :tipoPessoa, 
-                    :nivelAcesso
-                )";
+                    :nome, :documento, :nascimento, :telefone, :email, :senha, :tipoPessoa, :nivelAcesso
+                ) RETURNING \"IDUsuario\"";
 
         $stmt = $pdo->prepare($sql);
-
-        // 7. Substituir as "variáveis falsas" (:nome) pelos dados reais e executar
         $stmt->execute([
-            ':nome'        => $nome,
-            ':documento'   => $documento,
-            ':nascimento'  => $nascimento,
-            ':telefone'    => $telefone,
-            ':email'       => $email,
-            ':senha'       => $senhaHash,
-            ':tipoPessoa'  => $tipoPessoa,
-            ':nivelAcesso' => $nivelAcesso
+            ':nome'         => $nome,
+            ':documento'    => $documento,
+            ':nascimento'   => $nascimento,
+            ':telefone'     => $telefone,
+            ':email'        => $email,
+            ':senha'        => $senhaHash,
+            ':tipoPessoa'   => $tipoPessoa,
+            ':nivelAcesso'  => $nivelAcesso
         ]);
 
-        // 8. Se deu tudo certo, joga o usuário para a tela de login
+        // 4. Recupera o ID gerado pelo banco
+        $id_novo_usuario = $stmt->fetchColumn();
+
+        if ($id_novo_usuario) {
+            // ==============================================================================
+            // LÓGICA DE NEGÓCIO: INJEÇÃO DO KIT INICIAL DE CATEGORIAS
+            // ==============================================================================
+            $kitInicial = [
+                ['nome' => 'Alimentação', 'tipo' => 'despesa', 'icone' => 'bi-cart3'],
+                ['nome' => 'Moradia',     'tipo' => 'despesa', 'icone' => 'bi-house-door'],
+                ['nome' => 'Transporte',  'tipo' => 'despesa', 'icone' => 'bi-car-front'],
+                ['nome' => 'Saúde',       'tipo' => 'despesa', 'icone' => 'bi-heart-pulse'],
+                ['nome' => 'Lazer',       'tipo' => 'despesa', 'icone' => 'bi-controller'],
+                ['nome' => 'Salário',     'tipo' => 'receita', 'icone' => 'bi-cash-stack'],
+                ['nome' => 'Investimentos','tipo' => 'receita', 'icone' => 'bi-graph-up-arrow'],
+                ['nome' => 'Outros',      'tipo' => 'receita', 'icone' => 'bi-plus-circle-dotted']
+            ];
+
+            $sqlCat = "INSERT INTO \"Categoria\" (\"NomeCategoria\", \"TipoCategoria\", \"IconeCategoria\", \"FKUsuario\") 
+                       VALUES (:nome, :tipo, :icone, :uid)";
+            $stmtCat = $pdo->prepare($sqlCat);
+
+            foreach ($kitInicial as $cat) {
+                $stmtCat->execute([
+                    ':nome'  => $cat['nome'],
+                    ':tipo'  => $cat['tipo'],
+                    ':icone' => $cat['icone'],
+                    ':uid'   => $id_novo_usuario
+                ]);
+            }
+            // ==============================================================================
+        }
+
         header("Location: login.php?cadastro=sucesso");
         exit;
 
     } catch (PDOException $e) {
-        // Se der erro (ex: e-mail ou documento já cadastrado), ele avisa
         die("Erro ao salvar no banco de dados: " . $e->getMessage());
     }
 } else {
-    // Se tentarem acessar esse arquivo direto pela URL, manda de volta pro cadastro
     header("Location: cadastro.php");
     exit;
 }
-?>

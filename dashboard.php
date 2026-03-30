@@ -24,6 +24,17 @@ try {
 
 $totalCarteiras = count($carteiras);
 
+// --- VERIFICA SE É O PRIMEIRO ACESSO (Zero Transações) ---
+$is_primeiro_acesso = false;
+try {
+    $sqlTotalTrans = 'SELECT COUNT(*) FROM "Registro" WHERE "FKUsuario" = :uid';
+    $stmtTotal = $pdo->prepare($sqlTotalTrans);
+    $stmtTotal->execute([':uid' => $usuario_id]);
+    if ($stmtTotal->fetchColumn() == 0) {
+        $is_primeiro_acesso = true;
+    }
+} catch (PDOException $e) {}
+
 // --- LÓGICA DE NAVEGAÇÃO DE TEMPO (MESES) ---
 $mes_atual = isset($_GET['mes']) ? (int)$_GET['mes'] : (int)date('m');
 $ano_atual = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
@@ -79,20 +90,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         $diferenca = $saldo_informado - $saldo_sistema;
 
-        // Só faz algo se houver diferença
         if (abs($diferenca) > 0.009) { 
             $tipoRegistro = ($diferenca > 0) ? 'receita' : 'despesa';
             $valorRegistro = abs($diferenca);
             $descricao = ($saldo_sistema == 0) ? 'Saldo Inicial' : 'Ajuste de Saldo';
             
             try {
+                // Procura categoria de Ajuste
+                $sqlCat = 'SELECT "IDCategoria" FROM "Categoria" WHERE "FKUsuario" = :uid AND "NomeCategoria" = \'Ajuste de Saldo\' AND "TipoCategoria" = :tipo LIMIT 1';
+                $stmtCat = $pdo->prepare($sqlCat);
+                $stmtCat->execute([':uid' => $usuario_id, ':tipo' => $tipoRegistro]);
+                $catId = $stmtCat->fetchColumn();
+
+                // Cria categoria de Ajuste com engrenagem se não existir
+                if (!$catId) {
+                    $sqlNovaCat = 'INSERT INTO "Categoria" ("NomeCategoria", "TipoCategoria", "IconeCategoria", "FKUsuario") VALUES (\'Ajuste de Saldo\', :tipo, \'bi-gear-fill\', :uid)';
+                    $stmtNovaCat = $pdo->prepare($sqlNovaCat);
+                    $stmtNovaCat->execute([':tipo' => $tipoRegistro, ':uid' => $usuario_id]);
+                    
+                    $stmtCat->execute([':uid' => $usuario_id, ':tipo' => $tipoRegistro]);
+                    $catId = $stmtCat->fetchColumn();
+                }
+
                 $sqlAjuste = '
                     INSERT INTO "Registro" (
                         "TipoRegistro", "Valor", "Descricao", "MomentoRegistro",
-                        "StatusRegistro", "FKCarteira", "FKUsuario"
+                        "StatusRegistro", "FKCarteira", "FKUsuario", "FKCategoria"
                     ) VALUES (
                         :tipo, :valor, :descricao, CURRENT_DATE,
-                        \'efetivado\', :carteira, :usuario
+                        \'efetivado\', :carteira, :usuario, :categoria
                     )
                 ';
                 $stmtAjuste = $pdo->prepare($sqlAjuste);
@@ -101,7 +127,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     ':valor' => $valorRegistro,
                     ':descricao' => $descricao,
                     ':carteira' => $carteira_id_ajuste,
-                    ':usuario' => $usuario_id
+                    ':usuario' => $usuario_id,
+                    ':categoria' => $catId
                 ]);
                 header("Location: " . $redirectBase . "&sucesso=ajustado");
                 exit;
@@ -139,7 +166,6 @@ $transacoes = [];
 
 if ($carteira_selecionada) {
     try {
-        // 1. Saldo Histórico
         $sqlSaldo = '
             SELECT 
                 COALESCE(SUM(CASE WHEN "TipoRegistro" = \'receita\' THEN "Valor" ELSE 0 END), 0) as total_rec_hist,
@@ -157,7 +183,6 @@ if ($carteira_selecionada) {
             $saldoAtual = (float)$resultSaldo['total_rec_hist'] - (float)$resultSaldo['total_des_hist'];
         }
 
-        // 2. Receitas/Despesas do Mês
         $sqlMes = '
             SELECT 
                 COALESCE(SUM(CASE WHEN "TipoRegistro" = \'receita\' THEN "Valor" ELSE 0 END), 0) as total_receitas,
@@ -183,7 +208,6 @@ if ($carteira_selecionada) {
             $despesasMes = (float) $resultMes['total_despesas'];
         }
 
-        // 3. Busca Transações (AGORA PUXANDO O ÍCONE TAMBÉM)
         $sqlTransacoes = '
             SELECT 
                 r."IDRegistro", r."MomentoRegistro", r."Valor", r."Descricao", r."TipoRegistro", r."StatusRegistro",
@@ -238,7 +262,7 @@ require_once 'geral/header.php';
                 if ($_GET['sucesso'] === 'registro') $msg = 'Transação salva com sucesso!';
                 if ($_GET['sucesso'] === 'editado') $msg = 'Transação atualizada com sucesso!';
                 if ($_GET['sucesso'] === 'excluido') $msg = 'Transação excluída!';
-                if ($_GET['sucesso'] === 'ajustado') $msg = 'Saldo da carteira ajustado com sucesso!';
+                if ($_GET['sucesso'] === 'ajustado') $msg = 'Prontinho! Seu saldo foi ajustado e agora está real.';
             ?>
             <?php if($msg): ?>
             <div class="alert alert-success d-flex align-items-center gap-2 rounded-3 shadow-sm border-0 bg-success bg-opacity-10 text-success fw-semibold alert-dismissible fade show" role="alert">
@@ -521,6 +545,57 @@ require_once 'geral/header.php';
     </div>
 </div>
 
+<div class="modal fade" id="modalBoasVindas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content modal-boas-vindas-content border-0 rounded-4 overflow-hidden position-relative">
+            
+            <div class="position-absolute top-0 start-0 w-100 h-100" style="background: radial-gradient(circle at top right, rgba(170, 140, 44, 0.15), transparent 60%); pointer-events: none;"></div>
+
+            <div class="modal-body p-5 text-center position-relative z-index-1">
+                
+                <div class="mb-4 d-inline-flex justify-content-center align-items-center bg-dark border border-secondary-subtle rounded-circle shadow-lg" style="width: 90px; height: 90px;">
+                    <i class="bi bi-rocket-takeoff text-primary" style="color: var(--primary-gold-analysis) !important; font-size: 2.5rem;"></i>
+                </div>
+
+                <?php $primeiroNome = explode(' ', $_SESSION['usuario_nome'] ?? 'Visitante')[0]; ?>
+                <h2 class="text-light fw-bold mb-3">Bem-vindo(a) ao Auralis, <?= htmlspecialchars($primeiroNome) ?>!</h2>
+                
+                <p class="text-secondary fs-5 mb-5 mx-auto" style="max-width: 600px;">
+                    Sua jornada para o controle financeiro absoluto começa aqui. Para que o seu painel funcione perfeitamente, precisamos dar o nosso primeiro passo juntos.
+                </p>
+
+                <div class="bg-dark border border-secondary-subtle rounded-4 p-4 text-start mx-auto shadow-sm" style="max-width: 500px;">
+                    <label class="form-label text-light fw-semibold mb-3 fs-5 d-block text-center">
+                        Somando suas contas bancárias e reservas, qual o seu saldo total hoje?
+                    </label>
+                    
+                    <form method="POST" action="">
+                        <input type="hidden" name="action" value="ajustar_saldo">
+                        <input type="hidden" name="carteira_id_ajuste" value="<?= $carteira_selecionada ?>">
+                        <input type="hidden" name="saldo_sistema_atual" value="0">
+                        
+                        <div class="input-group input-group-lg mb-4 shadow-sm">
+                            <span class="input-group-text bg-body-tertiary border-secondary-subtle text-primary fw-bold border-end-0 fs-4" style="color: var(--primary-gold-analysis) !important;">R$</span>
+                            <input type="number" step="0.01" name="saldo_real" class="form-control bg-body-tertiary border-secondary-subtle border-start-0 text-light fw-bold shadow-none no-spinners fs-3 py-3" required placeholder="0,00" autofocus>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-gold btn-lg w-100 fw-bold text-dark rounded-pill py-3 shadow-lg transition-hover">
+                            Iniciar Minha Jornada
+                        </button>
+                        
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-link text-secondary text-decoration-none small" data-bs-dismiss="modal">
+                                Pular por enquanto, configuro depois.
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     .bg-charcoal-analysis { background-color: #1a1d21; }
     .auralis-table > tbody > tr.cursor-pointer:hover > td { background-color: rgba(255, 255, 255, 0.03) !important; }
@@ -529,9 +604,31 @@ require_once 'geral/header.php';
     .no-spinners::-webkit-outer-spin-button,
     .no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .no-spinners { -moz-appearance: textfield; }
+
+    /* Estilos do Modal de Boas-Vindas Acrílico */
+    #modalBoasVindas {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    .modal-boas-vindas-content {
+        background-color: #181A1F !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .btn-gold {
+        background: linear-gradient(135deg, #FFB800 0%, #D4AF37 100%);
+        border: none;
+    }
+    .btn-gold:hover {
+        background: linear-gradient(135deg, #FFD04F 0%, #E7C665 100%);
+        color: #000 !important;
+        box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4) !important;
+    }
 </style>
+
 <script>
-    // UX INTELIGENTE: Limpa a URL para evitar que a mensagem de sucesso repita no F5
+    // Limpeza da URL para não repetir alertas no F5
     if (window.history.replaceState) {
         const url = new URL(window.location);
         if (url.searchParams.has('sucesso')) {
@@ -539,5 +636,17 @@ require_once 'geral/header.php';
             window.history.replaceState({path: url.href}, '', url.href);
         }
     }
+
+    // Acionamento Automático do Modal de Boas Vindas se for o primeiro acesso
+    <?php if ($is_primeiro_acesso): ?>
+    document.addEventListener("DOMContentLoaded", function() {
+        var modalBoasVindas = new bootstrap.Modal(document.getElementById('modalBoasVindas'), {
+            backdrop: 'static', // Impede de fechar clicando fora sem querer
+            keyboard: false 
+        });
+        modalBoasVindas.show();
+    });
+    <?php endif; ?>
 </script>
+
 <?php require_once 'geral/footer.php'; ?>
