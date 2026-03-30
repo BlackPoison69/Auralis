@@ -14,7 +14,6 @@ $usuario_id = $_SESSION['usuario_id'];
 $carteiras = [];
 
 try {
-    // Busca TODAS as carteiras do usuário
     $sql = 'SELECT "IDCarteira", "TipoCarteira" FROM "Carteira" WHERE "FKUsuarioDono" = :usuario_id ORDER BY "TipoCarteira" ASC';
     $stmt = $pdo->prepare($sql);
     $stmt->execute([':usuario_id' => $usuario_id]);
@@ -25,6 +24,21 @@ try {
 
 $totalCarteiras = count($carteiras);
 
+// --- LÓGICA DE NAVEGAÇÃO DE TEMPO (MESES) ---
+$mes_atual = isset($_GET['mes']) ? (int)$_GET['mes'] : (int)date('m');
+$ano_atual = isset($_GET['ano']) ? (int)$_GET['ano'] : (int)date('Y');
+
+// Cálculo para os botões Voltar/Avançar
+$mes_ant = $mes_atual - 1; $ano_ant = $ano_atual;
+if ($mes_ant < 1) { $mes_ant = 12; $ano_ant--; }
+
+$mes_prox = $mes_atual + 1; $ano_prox = $ano_atual;
+if ($mes_prox > 12) { $mes_prox = 1; $ano_prox++; }
+
+$meses_pt = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 => 'Maio', 6 => 'Junho', 7 => 'Julho', 8 => 'Agosto', 9 => 'Setembro', 10 => 'Outubro', 11 => 'Novembro', 12 => 'Dezembro'];
+$nome_mes = $meses_pt[$mes_atual];
+
+
 // --- LÓGICA DE AÇÃO: ALTERAR STATUS ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'toggle_status') {
     $id_registro = $_POST['registro_id'];
@@ -32,21 +46,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
     if (in_array($novo_status, ['pendente', 'efetivado'])) {
         try {
-            // Atualiza o banco garantindo que o registro pertence ao usuário logado (Segurança)
             $sqlToggle = 'UPDATE "Registro" SET "StatusRegistro" = :status WHERE "IDRegistro" = :id AND "FKUsuario" = :uid';
             $stmtToggle = $pdo->prepare($sqlToggle);
-            $stmtToggle->execute([
-                ':status' => $novo_status,
-                ':id' => $id_registro,
-                ':uid' => $usuario_id
-            ]);
-            // Recarrega a página preservando a carteira selecionada
-            $redirectUrl = "dashboard.php" . (isset($_GET['carteira']) ? "?carteira=" . $_GET['carteira'] : "");
+            $stmtToggle->execute([':status' => $novo_status, ':id' => $id_registro, ':uid' => $usuario_id]);
+            
+            // Mantém os filtros ao recarregar
+            $redirectUrl = "dashboard.php?mes={$mes_atual}&ano={$ano_atual}";
+            if (isset($_GET['carteira'])) $redirectUrl .= "&carteira=" . $_GET['carteira'];
             header("Location: " . $redirectUrl);
             exit;
-        } catch (PDOException $e) {
-            // Tratar erro se necessário
-        }
+        } catch (PDOException $e) {}
     }
 }
 
@@ -65,6 +74,10 @@ foreach ($carteiras as $cart) {
     }
 }
 
+// Constrói os links de navegação mantendo a carteira selecionada
+$link_ant = "?mes={$mes_ant}&ano={$ano_ant}" . ($carteira_selecionada ? "&carteira={$carteira_selecionada}" : "");
+$link_prox = "?mes={$mes_prox}&ano={$ano_prox}" . ($carteira_selecionada ? "&carteira={$carteira_selecionada}" : "");
+
 // --- LÓGICA DE DADOS REAIS DO DASHBOARD ---
 $saldoAtual = 0.00;
 $receitasMes = 0.00;
@@ -73,7 +86,7 @@ $transacoes = [];
 
 if ($carteira_selecionada) {
     try {
-        // 1. Calcula o Saldo Histórico (Tudo que foi efetivado até hoje)
+        // 1. Saldo Histórico (Todo o dinheiro real da conta até hoje)
         $sqlSaldo = '
             SELECT 
                 COALESCE(SUM(CASE WHEN "TipoRegistro" = \'receita\' THEN "Valor" ELSE 0 END), 0) as total_rec_hist,
@@ -91,7 +104,7 @@ if ($carteira_selecionada) {
             $saldoAtual = (float)$resultSaldo['total_rec_hist'] - (float)$resultSaldo['total_des_hist'];
         }
 
-        // 2. Calcula APENAS o Mês Atual para os cards secundários
+        // 2. Calcula Receitas/Despesas FILTRANDO PELO MÊS E ANO SELECIONADOS
         $sqlMes = '
             SELECT 
                 COALESCE(SUM(CASE WHEN "TipoRegistro" = \'receita\' THEN "Valor" ELSE 0 END), 0) as total_receitas,
@@ -100,11 +113,16 @@ if ($carteira_selecionada) {
             WHERE "FKCarteira" = :carteira_id 
               AND "FKUsuario" = :usuario_id
               AND "StatusRegistro" = \'efetivado\'
-              AND EXTRACT(MONTH FROM "MomentoRegistro") = EXTRACT(MONTH FROM CURRENT_DATE)
-              AND EXTRACT(YEAR FROM "MomentoRegistro") = EXTRACT(YEAR FROM CURRENT_DATE)
+              AND EXTRACT(MONTH FROM "MomentoRegistro") = :mes
+              AND EXTRACT(YEAR FROM "MomentoRegistro") = :ano
         ';
         $stmtMes = $pdo->prepare($sqlMes);
-        $stmtMes->execute([':carteira_id' => $carteira_selecionada, ':usuario_id' => $usuario_id]);
+        $stmtMes->execute([
+            ':carteira_id' => $carteira_selecionada, 
+            ':usuario_id' => $usuario_id,
+            ':mes' => $mes_atual,
+            ':ano' => $ano_atual
+        ]);
         $resultMes = $stmtMes->fetch();
 
         if ($resultMes) {
@@ -112,7 +130,7 @@ if ($carteira_selecionada) {
             $despesasMes = (float) $resultMes['total_despesas'];
         }
 
-        // 3. Busca as Últimas Transações COM os dados de expansão (Vencimento, Recorrência)
+        // 3. Busca as Transações DO MÊS SELECIONADO
         $sqlTransacoes = '
             SELECT 
                 r."IDRegistro", r."MomentoRegistro", r."Valor", r."Descricao", r."TipoRegistro", r."StatusRegistro",
@@ -120,20 +138,23 @@ if ($carteira_selecionada) {
                 c."NomeCategoria"
             FROM "Registro" r
             LEFT JOIN "Categoria" c ON r."FKCategoria" = c."IDCategoria"
-            WHERE r."FKCarteira" = :carteira_id AND r."FKUsuario" = :usuario_id
+            WHERE r."FKCarteira" = :carteira_id 
+              AND r."FKUsuario" = :usuario_id
+              AND EXTRACT(MONTH FROM r."MomentoRegistro") = :mes
+              AND EXTRACT(YEAR FROM r."MomentoRegistro") = :ano
             ORDER BY r."MomentoRegistro" DESC
-            LIMIT 15
+            LIMIT 50
         ';
         $stmtTrans = $pdo->prepare($sqlTransacoes);
         $stmtTrans->execute([
             ':carteira_id' => $carteira_selecionada,
-            ':usuario_id' => $usuario_id
+            ':usuario_id' => $usuario_id,
+            ':mes' => $mes_atual,
+            ':ano' => $ano_atual
         ]);
         $transacoes = $stmtTrans->fetchAll();
 
-    } catch (PDOException $e) {
-        // Fallback limpo em caso de erro na query
-    }
+    } catch (PDOException $e) {}
 }
 
 require_once 'geral/header.php';
@@ -159,15 +180,33 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
         </div>
     <?php else: ?>
 
-        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary-subtle pb-3">
-            <div>
+        <div class="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary-subtle pb-3 flex-wrap gap-3">
+            <div class="d-flex align-items-center gap-4">
                 <h2 class="fw-bold text-light mb-0">Visão Geral</h2>
+                
+
+
+                
+                <div class="d-flex align-items-center bg-dark border border-secondary-subtle rounded-pill px-2 py-1 shadow-sm">
+<a href="<?= $link_ant ?>" class="btn btn-sm btn-link text-white transition-hover text-decoration-none">
+    <i class="bi bi-chevron-left"></i>
+</a>
+
+<span class="text-light fw-semibold px-3" style="min-width: 130px; text-align: center;">
+    <?= $nome_mes ?> <?= $ano_atual ?>
+</span>
+
+<a href="<?= $link_prox ?>" class="btn btn-sm btn-link text-white transition-hover text-decoration-none">
+    <i class="bi bi-chevron-right"></i>
+</a>
+                </div>
             </div>
+
 
             <div class="d-flex gap-2">
                 <div class="d-flex align-items-center gap-3">
-                    <select class="form-select bg-dark border-secondary text-light shadow-sm fw-semibold" style="width: 220px;"
-                        id="seletor_carteira" onchange="window.location.href='?carteira=' + this.value;">
+                    <select class="form-select bg-dark border-secondary text-light shadow-sm fw-semibold" style="width: 200px;"
+                        id="seletor_carteira" onchange="window.location.href='?mes=<?= $mes_atual ?>&ano=<?= $ano_atual ?>&carteira=' + this.value;">
                         <?php foreach ($carteiras as $cart): ?>
                             <option value="<?= htmlspecialchars($cart['IDCarteira']); ?>"
                                 <?= $carteira_selecionada == $cart['IDCarteira'] ? 'selected' : '' ?>>
@@ -180,12 +219,12 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
 
                     <div class="d-flex gap-2">
                         <a href="nova_transacao.php?carteira_id=<?= urlencode($carteira_selecionada) ?>&tipo=receita"
-                            class="btn btn-outline-success fw-bold d-flex align-items-center px-3 rounded-pill transition-hover shadow-sm" title="Adicionar Entrada">
+                            class="btn btn-outline-success fw-bold d-flex align-items-center px-3 rounded-pill transition-hover shadow-sm">
                             <i class="bi bi-arrow-up-short fs-5"></i> <span class="d-none d-sm-inline ms-1">Receita</span>
                         </a>
 
                         <a href="nova_transacao.php?carteira_id=<?= urlencode($carteira_selecionada) ?>&tipo=despesa"
-                            class="btn btn-outline-danger fw-bold d-flex align-items-center px-3 rounded-pill transition-hover shadow-sm" title="Adicionar Saída">
+                            class="btn btn-outline-danger fw-bold d-flex align-items-center px-3 rounded-pill transition-hover shadow-sm">
                             <i class="bi bi-arrow-down-short fs-5"></i> <span class="d-none d-sm-inline ms-1">Despesa</span>
                         </a>
                     </div>
@@ -206,7 +245,7 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                         <h3 class="fw-bold mb-1 <?= $saldoAtual < 0 ? 'text-danger' : 'text-light' ?>">
                             R$ <?= number_format($saldoAtual, 2, ',', '.') ?>
                         </h3>
-                        <p class="text-secondary small mb-0">Disponível no momento</p>
+                        <p class="text-secondary small mb-0">Total disponível hoje</p>
                     </div>
                 </div>
             </div>
@@ -215,7 +254,7 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                 <div class="card bg-body-tertiary border-secondary-subtle shadow-sm h-100 rounded-4">
                     <div class="card-body p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="card-title text-secondary mb-0 fw-semibold">Receitas (Mês)</h6>
+                            <h6 class="card-title text-secondary mb-0 fw-semibold">Receitas (<?= $nome_mes ?>)</h6>
                             <div class="p-2 bg-success bg-opacity-10 rounded-3">
                                 <i class="bi bi-graph-up-arrow text-success fs-5"></i>
                             </div>
@@ -231,7 +270,7 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                 <div class="card bg-body-tertiary border-secondary-subtle shadow-sm h-100 rounded-4">
                     <div class="card-body p-4">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h6 class="card-title text-secondary mb-0 fw-semibold">Despesas (Mês)</h6>
+                            <h6 class="card-title text-secondary mb-0 fw-semibold">Despesas (<?= $nome_mes ?>)</h6>
                             <div class="p-2 bg-danger bg-opacity-10 rounded-3">
                                 <i class="bi bi-graph-down-arrow text-danger fs-5"></i>
                             </div>
@@ -244,14 +283,14 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
             </div>
         </div>
 
-        <h4 class="fw-bold text-light mb-4">Últimas Transações</h4>
+        <h4 class="fw-bold text-light mb-4">Transações de <?= $nome_mes ?></h4>
         <div class="card bg-dark border-secondary-subtle shadow-sm rounded-4 overflow-hidden">
             
             <?php if (empty($transacoes)): ?>
                 <div class="card-body p-5 text-center">
                     <i class="bi bi-receipt text-secondary opacity-50 display-1 mb-3"></i>
-                    <h5 class="text-light fw-bold">Nenhuma transação encontrada</h5>
-                    <p class="text-secondary mb-0">Esta carteira está vazia. Comece adicionando uma receita ou despesa.</p>
+                    <h5 class="text-light fw-bold">Nenhum registro em <?= $nome_mes ?></h5>
+                    <p class="text-secondary mb-0">Esta carteira não tem movimentações neste mês.</p>
                 </div>
             <?php else: ?>
                 <div class="table-responsive" style="overflow-x: visible;">
@@ -274,7 +313,6 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                                 $iconeTipo = $isDespesa ? '<i class="bi bi-arrow-down-short fs-5 text-danger bg-danger bg-opacity-10 rounded-circle p-1 me-3"></i>' 
                                                         : '<i class="bi bi-arrow-up-short fs-5 text-success bg-success bg-opacity-10 rounded-circle p-1 me-3"></i>';
                                 
-                                // Variáveis para a expansão
                                 $rowId = "transacao-" . $index;
                                 $isPendente = ($t['StatusRegistro'] === 'pendente');
                                 $textoAcaoStatus = $isDespesa ? 'Marcar como Pago' : 'Marcar como Recebido';
@@ -303,12 +341,10 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                                     <?= $sinalValor ?> R$ <?= number_format($t['Valor'], 2, ',', '.') ?>
                                 </td>
                             </tr>
-
                             <tr>
                                 <td colspan="5" class="p-0 border-0">
                                     <div class="collapse" id="<?= $rowId ?>">
                                         <div class="p-4 bg-charcoal-analysis border-bottom border-secondary-subtle d-flex justify-content-between align-items-start">
-                                            
                                             <div class="d-flex gap-4">
                                                 <div>
                                                     <span class="d-block text-secondary small text-uppercase mb-1">Vencimento</span>
@@ -323,30 +359,31 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
                                                     </span>
                                                 </div>
                                             </div>
-
                                             <div class="d-flex gap-2">
                                                 <form method="POST" action="">
                                                     <input type="hidden" name="action" value="toggle_status">
                                                     <input type="hidden" name="registro_id" value="<?= $t['IDRegistro'] ?>">
-                                                    
+
                                                     <?php if ($isPendente): ?>
                                                         <input type="hidden" name="novo_status" value="efetivado">
-                                                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill fw-semibold px-3">
-                                                            <i class="bi bi-check-circle me-1"></i> <?= $textoAcaoStatus ?>
+                                                        <button type="submit" class="btn btn-sm btn-outline-success rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1">
+                                                            <i class="bi bi-check-circle"></i>
+                                                            <?= $textoAcaoStatus ?>
                                                         </button>
                                                     <?php else: ?>
                                                         <input type="hidden" name="novo_status" value="pendente">
-                                                        <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3">
-                                                            <i class="bi bi-arrow-counterclockwise me-1"></i> Desfazer (Tornar Pendente)
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1">
+                                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                                            Desfazer
                                                         </button>
                                                     <?php endif; ?>
                                                 </form>
 
-                                                <button class="btn btn-sm btn-outline-light border-secondary text-secondary rounded-pill px-3 transition-hover">
-                                                    <i class="bi bi-pencil-square me-1"></i> Editar
+                                                <button class="btn btn-sm btn-outline-warning rounded-pill fw-semibold px-3 d-inline-flex align-items-center gap-1 transition-hover">
+                                                    <i class="bi bi-pencil-square"></i>
+                                                    Editar
                                                 </button>
                                             </div>
-
                                         </div>
                                     </div>
                                 </td>
@@ -363,11 +400,8 @@ $primeiroNome = explode(' ', $_SESSION['usuario_nome'])[0];
 </main>
 
 <style>
-    /* Estilização extra para a tabela Dark Premium Expansível */
     .bg-charcoal-analysis { background-color: #1a1d21; }
-    .auralis-table > tbody > tr.cursor-pointer:hover > td {
-        background-color: rgba(255, 255, 255, 0.03) !important;
-    }
+    .auralis-table > tbody > tr.cursor-pointer:hover > td { background-color: rgba(255, 255, 255, 0.03) !important; }
     .table-active { background-color: #1a1d21 !important; }
 </style>
 
