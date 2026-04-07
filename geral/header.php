@@ -86,7 +86,7 @@ if (session_status() === PHP_SESSION_NONE) {
                                 aria-labelledby="menuUsuario">
                                 <li>
                                     <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="/Auralis/dashboard.php">
-                                        <i class="bi bi-speedometer2 me-2" style="color: gold;"></i> Meu Painel
+                                        <i class="bi bi-speedometer2 me-2" style="color: gold;"></i> Análises
                                     </a>
                                 </li>
                                 <li>

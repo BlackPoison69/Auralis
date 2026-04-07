@@ -24,9 +24,16 @@ try {
 
 $totalCarteiras = count($carteiras);
 
-// --- O GATILHO DO ONBOARDING: Se o usuário tem 0 carteiras, ele é novato ---
-$is_primeiro_acesso = ($totalCarteiras == 0);
-
+// --- VERIFICA SE É O PRIMEIRO ACESSO (Zero Transações) ---
+$is_primeiro_acesso = false;
+try {
+    $sqlTotalTrans = 'SELECT COUNT(*) FROM "Registro" WHERE "FKUsuario" = :uid';
+    $stmtTotal = $pdo->prepare($sqlTotalTrans);
+    $stmtTotal->execute([':uid' => $usuario_id]);
+    if ($stmtTotal->fetchColumn() == 0) {
+        $is_primeiro_acesso = true;
+    }
+} catch (PDOException $e) {}
 
 // --- LÓGICA DE NAVEGAÇÃO DE TEMPO (MESES) ---
 $mes_atual = isset($_GET['mes']) ? (int)$_GET['mes'] : (int)date('m');
@@ -42,7 +49,7 @@ $meses_pt = [1 => 'Janeiro', 2 => 'Fevereiro', 3 => 'Março', 4 => 'Abril', 5 =>
 $nome_mes = $meses_pt[$mes_atual];
 
 
-// --- LÓGICA DE AÇÃO DO SISTEMA ---
+// --- LÓGICA DE AÇÃO: ALTERAR STATUS, EXCLUIR OU AJUSTAR SALDO ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
     $carteira_url = isset($_GET['carteira']) ? "&carteira=" . $_GET['carteira'] : "";
@@ -75,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } catch (PDOException $e) {}
     }
 
-    // LÓGICA DO AJUSTE DE SALDO INTELIGENTE (NORMAL)
+    // LÓGICA DO AJUSTE DE SALDO INTELIGENTE
     if ($_POST['action'] === 'ajustar_saldo') {
         $saldo_informado = (float) str_replace(',', '.', $_POST['saldo_real']);
         $saldo_sistema = (float) $_POST['saldo_sistema_atual'];
@@ -89,80 +96,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $descricao = ($saldo_sistema == 0) ? 'Saldo Inicial' : 'Ajuste de Saldo';
             
             try {
+                // Procura categoria de Ajuste
                 $sqlCat = 'SELECT "IDCategoria" FROM "Categoria" WHERE "FKUsuario" = :uid AND "NomeCategoria" = \'Ajuste de Saldo\' AND "TipoCategoria" = :tipo LIMIT 1';
                 $stmtCat = $pdo->prepare($sqlCat);
                 $stmtCat->execute([':uid' => $usuario_id, ':tipo' => $tipoRegistro]);
                 $catId = $stmtCat->fetchColumn();
 
+                // Cria categoria de Ajuste com engrenagem se não existir
                 if (!$catId) {
                     $sqlNovaCat = 'INSERT INTO "Categoria" ("NomeCategoria", "TipoCategoria", "IconeCategoria", "FKUsuario") VALUES (\'Ajuste de Saldo\', :tipo, \'bi-gear-fill\', :uid)';
                     $stmtNovaCat = $pdo->prepare($sqlNovaCat);
                     $stmtNovaCat->execute([':tipo' => $tipoRegistro, ':uid' => $usuario_id]);
+                    
                     $stmtCat->execute([':uid' => $usuario_id, ':tipo' => $tipoRegistro]);
                     $catId = $stmtCat->fetchColumn();
                 }
 
-                $sqlAjuste = 'INSERT INTO "Registro" ("TipoRegistro", "Valor", "Descricao", "MomentoRegistro", "StatusRegistro", "FKCarteira", "FKUsuario", "FKCategoria") VALUES (:tipo, :valor, :descricao, CURRENT_DATE, \'efetivado\', :carteira, :usuario, :categoria)';
+                $sqlAjuste = '
+                    INSERT INTO "Registro" (
+                        "TipoRegistro", "Valor", "Descricao", "MomentoRegistro",
+                        "StatusRegistro", "FKCarteira", "FKUsuario", "FKCategoria"
+                    ) VALUES (
+                        :tipo, :valor, :descricao, CURRENT_DATE,
+                        \'efetivado\', :carteira, :usuario, :categoria
+                    )
+                ';
                 $stmtAjuste = $pdo->prepare($sqlAjuste);
-                $stmtAjuste->execute([':tipo' => $tipoRegistro, ':valor' => $valorRegistro, ':descricao' => $descricao, ':carteira' => $carteira_id_ajuste, ':usuario' => $usuario_id, ':categoria' => $catId]);
-                
+                $stmtAjuste->execute([
+                    ':tipo' => $tipoRegistro,
+                    ':valor' => $valorRegistro,
+                    ':descricao' => $descricao,
+                    ':carteira' => $carteira_id_ajuste,
+                    ':usuario' => $usuario_id,
+                    ':categoria' => $catId
+                ]);
                 header("Location: " . $redirectBase . "&sucesso=ajustado");
                 exit;
             } catch (PDOException $e) {}
         } else {
             header("Location: " . $redirectBase);
             exit;
-        }
-    }
-
-    // NOVA LÓGICA: ONBOARDING EM 2 PASSOS
-    if ($_POST['action'] === 'onboarding') {
-        $nome_carteira = trim($_POST['nome_carteira']);
-        $saldo_informado = (float) str_replace(',', '.', $_POST['saldo_real']);
-
-        if (!empty($nome_carteira)) {
-            try {
-                // 1. Cria a Carteira primeiro e pega o ID dela
-                $sqlNovaCart = 'INSERT INTO "Carteira" ("TipoCarteira", "FKUsuarioDono") VALUES (:nome, :uid) RETURNING "IDCarteira"';
-                $stmtNovaCart = $pdo->prepare($sqlNovaCart);
-                $stmtNovaCart->execute([':nome' => $nome_carteira, ':uid' => $usuario_id]);
-                $nova_carteira_id = $stmtNovaCart->fetchColumn();
-
-                // 2. Se o usuário colocou saldo > 0, fazemos o Ajuste Initial
-                if (abs($saldo_informado) > 0.009 && $nova_carteira_id) {
-                    $tipoRegistro = ($saldo_informado > 0) ? 'receita' : 'despesa';
-                    
-                    $sqlCat = 'SELECT "IDCategoria" FROM "Categoria" WHERE "FKUsuario" = :uid AND "NomeCategoria" = \'Ajuste de Saldo\' AND "TipoCategoria" = :tipo LIMIT 1';
-                    $stmtCat = $pdo->prepare($sqlCat);
-                    $stmtCat->execute([':uid' => $usuario_id, ':tipo' => $tipoRegistro]);
-                    $catId = $stmtCat->fetchColumn();
-
-                    if (!$catId) {
-                        $sqlNovaCat = 'INSERT INTO "Categoria" ("NomeCategoria", "TipoCategoria", "IconeCategoria", "FKUsuario") VALUES (\'Ajuste de Saldo\', :tipo, \'bi-gear-fill\', :uid) RETURNING "IDCategoria"';
-                        $stmtNovaCat = $pdo->prepare($sqlNovaCat);
-                        $stmtNovaCat->execute([':tipo' => $tipoRegistro, ':uid' => $usuario_id]);
-                        $catId = $stmtNovaCat->fetchColumn(); // Pega a categoria criada
-                    }
-
-                    $sqlAjuste = 'INSERT INTO "Registro" ("TipoRegistro", "Valor", "Descricao", "MomentoRegistro", "StatusRegistro", "FKCarteira", "FKUsuario", "FKCategoria") VALUES (:tipo, :valor, :descricao, CURRENT_DATE, \'efetivado\', :carteira, :usuario, :categoria)';
-                    $stmtAjuste = $pdo->prepare($sqlAjuste);
-                    $stmtAjuste->execute([
-                        ':tipo' => $tipoRegistro,
-                        ':valor' => abs($saldo_informado),
-                        ':descricao' => 'Saldo Inicial',
-                        ':carteira' => $nova_carteira_id,
-                        ':usuario' => $usuario_id,
-                        ':categoria' => $catId
-                    ]);
-                }
-                
-                header("Location: dashboard.php?sucesso=bemvindo");
-                exit;
-            } catch (PDOException $e) {
-                // Em caso de erro
-                header("Location: dashboard.php");
-                exit;
-            }
         }
     }
 }
@@ -289,8 +262,7 @@ require_once 'geral/header.php';
                 if ($_GET['sucesso'] === 'registro') $msg = 'Transação salva com sucesso!';
                 if ($_GET['sucesso'] === 'editado') $msg = 'Transação atualizada com sucesso!';
                 if ($_GET['sucesso'] === 'excluido') $msg = 'Transação excluída!';
-                if ($_GET['sucesso'] === 'ajustado') $msg = 'Prontinho! Seu saldo foi ajustado.';
-                if ($_GET['sucesso'] === 'bemvindo') $msg = 'Tudo pronto! Sua jornada no Auralis começou.';
+                if ($_GET['sucesso'] === 'ajustado') $msg = 'Prontinho! Seu saldo foi ajustado e agora está real.';
             ?>
             <?php if($msg): ?>
             <div class="alert alert-success d-flex align-items-center gap-2 rounded-3 shadow-sm border-0 bg-success bg-opacity-10 text-success fw-semibold alert-dismissible fade show" role="alert">
@@ -546,6 +518,10 @@ require_once 'geral/header.php';
             </div>
             <form method="POST" action="">
                 <div class="modal-body p-4">
+                    <p class="text-secondary small mb-4">
+                        Se o saldo do aplicativo estiver diferente do saldo do seu banco, informe o valor real abaixo. O Auralis criará um registro de ajuste automático para corrigir a diferença.
+                    </p>
+                    
                     <input type="hidden" name="action" value="ajustar_saldo">
                     <input type="hidden" name="carteira_id_ajuste" value="<?= $carteira_selecionada ?>">
                     <input type="hidden" name="saldo_sistema_atual" value="<?= $saldoAtual ?>">
@@ -558,8 +534,11 @@ require_once 'geral/header.php';
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer border-top border-secondary-subtle">
-                    <button type="submit" class="btn btn-gold fw-bold text-dark w-100 rounded-pill py-2">Corrigir Saldo</button>
+                <div class="modal-footer border-top border-secondary-subtle d-flex justify-content-between">
+                    <button type="button" class="btn btn-link text-secondary text-decoration-none" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn fw-bold text-dark px-4 rounded-pill" style="background: linear-gradient(135deg, #FFB800 0%, #D4AF37 100%);">
+                        Corrigir Saldo
+                    </button>
                 </div>
             </form>
         </div>
@@ -573,67 +552,45 @@ require_once 'geral/header.php';
             <div class="position-absolute top-0 start-0 w-100 h-100" style="background: radial-gradient(circle at top right, rgba(170, 140, 44, 0.15), transparent 60%); pointer-events: none;"></div>
 
             <div class="modal-body p-5 text-center position-relative z-index-1">
-                <form method="POST" action="" id="formOnboarding">
-                    <input type="hidden" name="action" value="onboarding">
+                
+                <div class="mb-4 d-inline-flex justify-content-center align-items-center bg-dark border border-secondary-subtle rounded-circle shadow-lg" style="width: 90px; height: 90px;">
+                    <i class="bi bi-rocket-takeoff text-primary" style="color: var(--primary-gold-analysis) !important; font-size: 2.5rem;"></i>
+                </div>
 
-                    <div id="onboarding_passo1">
-                        <div class="mb-4 d-inline-flex justify-content-center align-items-center bg-dark border border-secondary-subtle rounded-circle shadow-lg" style="width: 90px; height: 90px;">
-                            <i class="bi bi-wallet2 text-primary" style="color: var(--primary-gold-analysis) !important; font-size: 2.5rem;"></i>
-                        </div>
+                <?php $primeiroNome = explode(' ', $_SESSION['usuario_nome'] ?? 'Visitante')[0]; ?>
+                <h2 class="text-light fw-bold mb-3">Bem-vindo(a) ao Auralis, <?= htmlspecialchars($primeiroNome) ?>!</h2>
+                
+                <p class="text-secondary fs-5 mb-5 mx-auto" style="max-width: 600px;">
+                    Sua jornada para o controle financeiro absoluto começa aqui. Para que o seu painel funcione perfeitamente, precisamos dar o nosso primeiro passo juntos.
+                </p>
 
-                        <?php $primeiroNome = explode(' ', $_SESSION['usuario_nome'] ?? 'Visitante')[0]; ?>
-                        <h2 class="text-light fw-bold mb-3">Bem-vindo(a) ao Auralis, <?= htmlspecialchars($primeiroNome) ?>!</h2>
+                <div class="bg-dark border border-secondary-subtle rounded-4 p-4 text-start mx-auto shadow-sm" style="max-width: 500px;">
+                    <label class="form-label text-light fw-semibold mb-3 fs-5 d-block text-center">
+                        Somando suas contas bancárias e reservas, qual o seu saldo total hoje?
+                    </label>
+                    
+                    <form method="POST" action="">
+                        <input type="hidden" name="action" value="ajustar_saldo">
+                        <input type="hidden" name="carteira_id_ajuste" value="<?= $carteira_selecionada ?>">
+                        <input type="hidden" name="saldo_sistema_atual" value="0">
                         
-                        <p class="text-secondary fs-5 mb-4 mx-auto" style="max-width: 600px;">
-                            Sua jornada para o controle financeiro começa agora. Primeiro, vamos criar a sua gaveta de dinheiro.
-                        </p>
-
-                        <div class="bg-dark border border-secondary-subtle rounded-4 p-4 text-start mx-auto shadow-sm" style="max-width: 500px;">
-                            <label class="form-label text-light fw-semibold mb-3 fs-5 d-block text-center">
-                                Qual o nome da sua conta principal?
-                            </label>
-                            
-                            <input type="text" id="input_nome_carteira" name="nome_carteira" class="form-control form-control-lg bg-body-tertiary border-secondary-subtle text-light fw-bold shadow-none fs-4 py-3 mb-4 text-center" placeholder="Ex: Conta Pessoal, Dinheiro Físico..." required>
-                            
-                            <button type="button" onclick="irParaPasso2()" class="btn btn-gold btn-lg w-100 fw-bold text-dark rounded-pill py-3 shadow-lg transition-hover">
-                                Próximo <i class="bi bi-arrow-right ms-2"></i>
+                        <div class="input-group input-group-lg mb-4 shadow-sm">
+                            <span class="input-group-text bg-body-tertiary border-secondary-subtle text-primary fw-bold border-end-0 fs-4" style="color: var(--primary-gold-analysis) !important;">R$</span>
+                            <input type="number" step="0.01" name="saldo_real" class="form-control bg-body-tertiary border-secondary-subtle border-start-0 text-light fw-bold shadow-none no-spinners fs-3 py-3" required placeholder="0,00" autofocus>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-gold btn-lg w-100 fw-bold text-dark rounded-pill py-3 shadow-lg transition-hover">
+                            Iniciar Minha Jornada
+                        </button>
+                        
+                        <div class="text-center mt-3">
+                            <button type="button" class="btn btn-link text-secondary text-decoration-none small" data-bs-dismiss="modal">
+                                Pular por enquanto, configuro depois.
                             </button>
                         </div>
-                    </div>
+                    </form>
+                </div>
 
-                    <div id="onboarding_passo2" class="d-none">
-                        <div class="mb-4 d-inline-flex justify-content-center align-items-center bg-dark border border-secondary-subtle rounded-circle shadow-lg" style="width: 90px; height: 90px;">
-                            <i class="bi bi-cash-stack text-success" style="font-size: 2.5rem;"></i>
-                        </div>
-
-                        <h2 class="text-light fw-bold mb-3">Ótimo! Conta criada.</h2>
-                        
-                        <p class="text-secondary fs-5 mb-4 mx-auto" style="max-width: 600px;">
-                            Para que possamos prosseguir com uma maior precição, qual o saldo atual de <strong>todas</strong> suas carteiras <i>(Físicas ou digitais)</i>? Não se preocupe, você poderá ajustar isso depois se precisar.
-                        </p>
-
-                        <div class="bg-dark border border-secondary-subtle rounded-4 p-4 text-start mx-auto shadow-sm" style="max-width: 500px;">
-                            <label class="form-label text-light fw-semibold mb-3 fs-5 d-block text-center">
-                                Qual o seu saldo na carteira <span id="display_nome_carteira" class="text-primary" style="color: var(--primary-gold-analysis) !important;"></span>?
-                            </label>
-                            
-                            <div class="input-group input-group-lg mb-4 shadow-sm">
-                                <span class="input-group-text bg-body-tertiary border-secondary-subtle text-primary fw-bold border-end-0 fs-4" style="color: var(--primary-gold-analysis) !important;">R$</span>
-                                <input type="number" step="0.01" name="saldo_real" class="form-control bg-body-tertiary border-secondary-subtle border-start-0 text-light fw-bold shadow-none no-spinners fs-3 py-3" placeholder="0,00" required>
-                            </div>
-                            
-                            <div class="d-flex gap-2">
-                                <button type="button" onclick="irParaPasso1()" class="btn btn-outline-secondary btn-lg rounded-pill py-3 px-4">
-                                    <i class="bi bi-arrow-left"></i>
-                                </button>
-                                <button type="submit" class="btn btn-gold btn-lg flex-grow-1 fw-bold text-dark rounded-pill py-3 shadow-lg transition-hover">
-                                    Finalizar e Entrar
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    
-                </form>
             </div>
         </div>
     </div>
@@ -643,19 +600,35 @@ require_once 'geral/header.php';
     .bg-charcoal-analysis { background-color: #1a1d21; }
     .auralis-table > tbody > tr.cursor-pointer:hover > td { background-color: rgba(255, 255, 255, 0.03) !important; }
     .table-active { background-color: #1a1d21 !important; }
+    
     .no-spinners::-webkit-outer-spin-button,
     .no-spinners::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .no-spinners { -moz-appearance: textfield; }
 
-    #modalBoasVindas { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); background-color: rgba(0, 0, 0, 0.65); }
-    .modal-boas-vindas-content { background-color: #181A1F !important; border: 1px solid rgba(255, 255, 255, 0.08) !important; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); }
-    
-    .btn-gold { background: linear-gradient(135deg, #FFB800 0%, #D4AF37 100%); border: none; }
-    .btn-gold:hover { background: linear-gradient(135deg, #FFD04F 0%, #E7C665 100%); color: #000 !important; box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4) !important; }
+    /* Estilos do Modal de Boas-Vindas Acrílico */
+    #modalBoasVindas {
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    .modal-boas-vindas-content {
+        background-color: #181A1F !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .btn-gold {
+        background: linear-gradient(135deg, #FFB800 0%, #D4AF37 100%);
+        border: none;
+    }
+    .btn-gold:hover {
+        background: linear-gradient(135deg, #FFD04F 0%, #E7C665 100%);
+        color: #000 !important;
+        box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4) !important;
+    }
 </style>
 
 <script>
-    // Limpeza da URL
+    // Limpeza da URL para não repetir alertas no F5
     if (window.history.replaceState) {
         const url = new URL(window.location);
         if (url.searchParams.has('sucesso')) {
@@ -664,34 +637,11 @@ require_once 'geral/header.php';
         }
     }
 
-    // Lógica dos Passos do Onboarding
-    function irParaPasso2() {
-        var inputNome = document.getElementById('input_nome_carteira');
-        if (inputNome.value.trim() === '') {
-            inputNome.classList.add('is-invalid');
-            inputNome.focus();
-            return;
-        }
-        inputNome.classList.remove('is-invalid');
-        
-        // Coloca o nome escolhido no texto do Passo 2
-        document.getElementById('display_nome_carteira').innerText = '"' + inputNome.value.trim() + '"';
-        
-        // Troca as telas
-        document.getElementById('onboarding_passo1').classList.add('d-none');
-        document.getElementById('onboarding_passo2').classList.remove('d-none');
-    }
-
-    function irParaPasso1() {
-        document.getElementById('onboarding_passo2').classList.add('d-none');
-        document.getElementById('onboarding_passo1').classList.remove('d-none');
-    }
-
-    // Acionamento Automático se o usuário tem 0 carteiras
+    // Acionamento Automático do Modal de Boas Vindas se for o primeiro acesso
     <?php if ($is_primeiro_acesso): ?>
     document.addEventListener("DOMContentLoaded", function() {
         var modalBoasVindas = new bootstrap.Modal(document.getElementById('modalBoasVindas'), {
-            backdrop: 'static', 
+            backdrop: 'static', // Impede de fechar clicando fora sem querer
             keyboard: false 
         });
         modalBoasVindas.show();
