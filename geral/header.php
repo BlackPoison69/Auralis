@@ -90,7 +90,7 @@ if (session_status() === PHP_SESSION_NONE) {
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="#">
+                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="/Auralis/carteira/listar_carteiras.php">
                                         <i class="bi bi-wallet2 me-2" style="color: gold;"></i> Minhas Carteiras
                                     </a>
                                 </li>
