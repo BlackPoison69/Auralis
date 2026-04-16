@@ -1,4 +1,7 @@
 <?php
+
+//Documentação do Dashboard - Auralis (utilizando IA para comentar e organizar o código para visibilidade e manutenção)
+
 // 1. Inicia a sessão e verifica a segurança
 session_start();
 
@@ -23,6 +26,63 @@ try {
 }
 
 $totalCarteiras = count($carteiras);
+
+// ==============================================================================
+// MOTOR DE RECORRÊNCIA AURALIS (Executado no carregamento do Dashboard)
+// ==============================================================================
+$mesAnoAtual = date('Y-m');
+
+try {
+    // 1. Verifica se o sistema já rodou este mês
+    $sqlConfig = 'SELECT "Valor" FROM "ConfiguracaoSistema" WHERE "Chave" = \'ultima_recorrencia\' AND "FKUsuario" = :uid';
+    $stmtConfig = $pdo->prepare($sqlConfig);
+    $stmtConfig->execute([':uid' => $usuario_id]);
+    $ultimaExecucao = $stmtConfig->fetchColumn();
+
+    if ($ultimaExecucao !== $mesAnoAtual) {
+        // 2. Busca contas recorrentes do mês passado (para evitar gaps)
+        $mesAnterior = date('Y-m', strtotime('-1 month'));
+        
+        $sqlRec = 'SELECT * FROM "Registro" WHERE "FKUsuario" = :uid AND "Recorrente" = true AND TO_CHAR("MomentoRegistro", \'YYYY-MM\') = :mes_ant';
+        $stmtRec = $pdo->prepare($sqlRec);
+        $stmtRec->execute([':uid' => $usuario_id, ':mes_ant' => $mesAnterior]);
+        $contas = $stmtRec->fetchAll();
+
+        if (!empty($contas)) {
+            $sqlInsert = 'INSERT INTO "Registro" ("TipoRegistro", "Valor", "Descricao", "MomentoRegistro", "DataVencimento", "StatusRegistro", "Recorrente", "DiaVencimento", "FKCarteira", "FKUsuario", "FKCategoria") 
+                          VALUES (:tipo, :valor, :desc, :momento, :venc, \'pendente\', true, :dia, :cart, :uid, :cat)';
+            $stmtInsert = $pdo->prepare($sqlInsert);
+
+            foreach ($contas as $c) {
+                // Ajusta a data para o dia de vencimento no mês atual
+                $novaData = date('Y-m') . '-' . str_pad($c['DiaVencimento'], 2, '0', STR_PAD_LEFT);
+                
+                $stmtInsert->execute([
+                    ':tipo' => $c['TipoRegistro'],
+                    ':valor' => $c['Valor'],
+                    ':desc' => $c['Descricao'],
+                    ':momento' => $novaData,
+                    ':venc' => $novaData,
+                    ':dia' => $c['DiaVencimento'],
+                    ':cart' => $c['FKCarteira'],
+                    ':uid' => $usuario_id,
+                    ':cat' => $c['FKCategoria']
+                ]);
+            }
+        }
+
+        // 3. Atualiza a "memória" do sistema
+        if ($ultimaExecucao === false) {
+            $sqlUpd = 'INSERT INTO "ConfiguracaoSistema" ("Chave", "Valor", "FKUsuario") VALUES (\'ultima_recorrencia\', :v, :uid)';
+        } else {
+            $sqlUpd = 'UPDATE "ConfiguracaoSistema" SET "Valor" = :v WHERE "Chave" = \'ultima_recorrencia\' AND "FKUsuario" = :uid';
+        }
+        $pdo->prepare($sqlUpd)->execute([':v' => $mesAnoAtual, ':uid' => $usuario_id]);
+    }
+} catch (PDOException $e) {
+    // Falha silenciosa para não quebrar o dashboard caso dê algum erro de banco
+}
+// ==============================================================================
 
 // --- VERIFICA SE É O PRIMEIRO ACESSO (Zero Transações) ---
 $is_primeiro_acesso = false;
@@ -449,12 +509,13 @@ require_once 'geral/header.php';
                                     <div class="collapse" id="<?= $rowId ?>">
                                         <div class="p-4 bg-charcoal-analysis border-bottom border-secondary-subtle d-flex justify-content-between align-items-start">
                                             <div class="d-flex gap-4">
-                                                <div>
-                                                    <span class="d-block text-secondary small text-uppercase mb-1">Vencimento</span>
-                                                    <span class="text-light fs-6">
-                                                        <?= !empty($t['DataVencimento']) ? date('d/m/Y', strtotime($t['DataVencimento'])) : '<span class="text-muted">Não definido</span>' ?>
-                                                    </span>
-                                                </div>
+                                                <?php $labelData = $isDespesa ? 'Vencimento' : 'Recebimento'; ?>
+                                                    <div>
+                                                        <span class="d-block text-secondary small text-uppercase mb-1"><?= $labelData ?></span>
+                                                        <span class="text-light fs-6">
+                                                            <?= !empty($t['DataVencimento']) ? date('d/m/Y', strtotime($t['DataVencimento'])) : '<span class="text-muted">Não definido</span>' ?>
+                                                        </span>
+                                                    </div>
                                                 <div>
                                                     <span class="d-block text-secondary small text-uppercase mb-1">Recorrência</span>
                                                     <span class="text-light fs-6">
