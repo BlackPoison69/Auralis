@@ -11,6 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Limpa o e-mail e pega a senha digitada
     $email = trim($_POST['email']);
     $senha = $_POST['senha'];
+    // Verifica se a caixinha "Salvar neste computador" foi marcada
+    $lembrar_me = isset($_POST['lembrar']) ? true : false;
 
     // Validação de segurança: se algum campo vier vazio, barra na hora
     if (empty($email) || empty($senha)) {
@@ -20,45 +22,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         // 3. Busca apenas o usuário que tem esse e-mail no Supabase
-        // (Sempre coloque os nomes das colunas entre aspas duplas no Postgres)
         $sql = "SELECT \"IDUsuario\", \"Nome\", \"Senha\", \"NivelAcesso\" FROM \"Usuario\" WHERE \"Email\" = :email LIMIT 1";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([':email' => $email]);
         
-        // Pega o resultado (vai retornar um array com os dados ou 'false' se não achar)
+        // Pega o resultado
         $usuario = $stmt->fetch();
 
-        // 4. A Mágica da Criptografia: O usuário existe e a senha bate?
-        // A função password_verify compara a senha digitada com aquele código embaralhado salvo no banco
+        // 4. A Mágica da Criptografia
         if ($usuario && password_verify($senha, $usuario['Senha'])) {
             
-            // 5. Segurança Avançada: Troca a "identidade" da sessão para evitar roubo de cookies
+            // 5. Segurança Avançada
             session_regenerate_id(true);
 
-            // 6. Cria o "Crachá" do usuário preenchendo as variáveis de sessão
+            // 6. Cria o "Crachá" do usuário
             $_SESSION['usuario_id']   = $usuario['IDUsuario'];
             $_SESSION['usuario_nome'] = $usuario['Nome'];
             $_SESSION['nivel_acesso'] = $usuario['NivelAcesso'];
 
-            // 7. Redireciona para o Painel de Controle (Dashboard)
-            // Usamos ../ para sair da pasta usuario e ir para a raiz onde ficará o dashboard
+            // ====================================================================
+            // 6.5 A MÁGICA DO "LEMBRAR-ME" (COOKIES)
+            // ====================================================================
+            if ($lembrar_me) {
+                // Cria um token único, seguro e aleatório
+                $token = bin2hex(random_bytes(32));
+                
+                // Salva o token no banco de dados (Vamos precisar criar essa coluna depois se não existir, mas por enquanto, salvaremos uma versão mais simples: ID do usuário e um Hash)
+                // Para manter simples sem alterar o banco agora, vamos criar um cookie assinado.
+                // O formato será: IDUsuario:HashSeguro
+                $chave_secreta = "Auralis2026_UltraSecretKey"; // Nunca mude isso em produção
+                $assinatura = hash_hmac('sha256', $usuario['IDUsuario'], $chave_secreta);
+                $conteudo_cookie = $usuario['IDUsuario'] . ':' . $assinatura;
+
+                // Envia o cookie para o computador da pessoa. Ele dura 30 dias.
+                setcookie('auralis_remember', $conteudo_cookie, time() + (86400 * 30), "/"); // 86400 = 1 dia
+            }
+            // ====================================================================
+
+            // 7. Redireciona para o Painel de Controle
             header("Location: ../dashboard.php"); 
             exit;
             
         } else {
-            // Segurança Básica: Nunca diga se o que está errado é o e-mail ou a senha.
-            // Diga apenas "Credenciais inválidas" para não dar dicas a invasores.
             header("Location: login.php?erro=invalido");
             exit;
         }
 
     } catch (PDOException $e) {
-        // Se o banco cair ou a consulta der erro
         die("Erro ao tentar fazer login: " . $e->getMessage());
     }
 
 } else {
-    // Se tentarem acessar esse arquivo pela URL sem preencher o formulário
     header("Location: login.php");
     exit;
 }

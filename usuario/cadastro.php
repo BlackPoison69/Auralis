@@ -4,7 +4,6 @@ require_once '../geral/header.php';
 ?>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-
 <script src="https://cdn.jsdelivr.net/npm/cleave.js@1.6.0/dist/cleave.min.js"></script>
 
 <main class="container py-5 mt-4">
@@ -54,10 +53,11 @@ require_once '../geral/header.php';
 
                         <div class="col-md-5 mb-4">
                             <label for="nascimento" class="form-label text-light opacity-75 fw-semibold mb-2"
-                                id="label_nascimento">Data de
-                                Nascimento</label>
+                                id="label_nascimento">Data de Nascimento</label>
                             <input type="date" class="form-control form-control-lg bg-dark border-secondary text-light"
-                                id="nascimento" name="nascimento" required>
+                                id="nascimento" name="nascimento" required 
+                                min="<?= date('Y-m-d', strtotime('-120 years')) ?>" 
+                                max="<?= date('Y-m-d', strtotime('-12 years')) ?>">
                         </div>
                     </div>
 
@@ -69,7 +69,7 @@ require_once '../geral/header.php';
                                         class="bi bi-telephone-fill"></i></span>
                                 <input type="tel"
                                     class="form-control form-control-lg bg-dark border-secondary text-light"
-                                    id="telefone" name="telefone" placeholder="(17) 99999-9999">
+                                    id="telefone" name="telefone" placeholder="(17) 99999-9999" required>
                             </div>
                         </div>
 
@@ -90,14 +90,15 @@ require_once '../geral/header.php';
                             <label for="senha" class="form-label text-light opacity-75 fw-semibold">Senha</label>
                             <input type="password"
                                 class="form-control form-control-lg bg-dark border-secondary text-light" id="senha"
-                                name="senha" required placeholder="Mínimo 8 caracteres">
+                                name="senha" required minlength="8" placeholder="Mínimo 8 caracteres">
                         </div>
-                        <div class="col-md-6">
-                            <label for="confirma_senha" class="form-label text-light opacity-75 fw-semibold">Confirmar
-                                Senha</label>
-                            <input type="password"
-                                class="form-control form-control-lg bg-dark border-secondary text-light"
-                                id="confirma_senha" name="confirma_senha" required placeholder="Repita a senha">
+                            <div class="col-md-6">
+                            <label for="confirma_senha" class="form-label text-light opacity-75 fw-semibold">Confirmar Senha</label>
+                            <input type="password" class="form-control form-control-lg bg-dark border-secondary text-light"
+                                id="confirma_senha" name="confirma_senha" required minlength="8" placeholder="Repita a senha">
+                            <div class="invalid-feedback fw-bold">
+                                As senhas não conferem!
+                            </div>
                         </div>
                     </div>
 
@@ -141,12 +142,24 @@ require_once '../geral/header.php';
 </style>
 
 <script>
-    // 1. Máscara do Telefone (Padrão Celular Brasileiro)
-    new Cleave('#telefone', {
-        blocks: [0, 2, 0, 5, 4], // Define o formato (XX) XXXXX-XXXX
-        delimiters: ['(', ') ', '-'], // Símbolos de formatação
-        numericOnly: true // Impede QUALQUER letra
-    });
+    // 1. Máscara do Telefone (JavaScript Puro - Adaptável para Fixo e Celular)
+    const inputTelefone = document.getElementById('telefone');
+    if(inputTelefone) {
+        inputTelefone.addEventListener('input', function (e) {
+            let v = e.target.value.replace(/\D/g, ""); // Remove tudo o que não é número
+            v = v.substring(0, 11); // Limita a 11 dígitos máximos (DDD + 9 dígitos)
+            
+            if (v.length > 2) {
+                v = v.replace(/^(\d{2})(\d)/g, "($1) $2"); // Coloca parênteses no DDD
+            }
+            if (v.length > 9) {
+                v = v.replace(/(\d{5})(\d)/, "$1-$2"); // Formato celular: (99) 99999-9999
+            } else if (v.length > 6) {
+                v = v.replace(/(\d{4})(\d)/, "$1-$2"); // Formato fixo: (99) 9999-9999
+            }
+            e.target.value = v;
+        });
+    }
 
     // 2. Lógica Dinâmica do CPF/CNPJ e Data
     const docSwitch = document.getElementById('doc_switch');
@@ -156,7 +169,6 @@ require_once '../geral/header.php';
 
     let cleaveInstance;
 
-    // Função única que controla a máscara e os textos
     function applyDocumentMask() {
         if (cleaveInstance) {
             cleaveInstance.destroy();
@@ -183,15 +195,35 @@ require_once '../geral/header.php';
                 numericOnly: true
             });
         }
-        // Limpa o campo ao trocar a máscara
         docInput.value = '';
     }
 
-    // Aciona a função quando clica no botão
     docSwitch.addEventListener('change', applyDocumentMask);
-
-    // Roda a função assim que a página carrega para já formatar em CPF
     applyDocumentMask();
+
+// 3. Validação de Senhas no Front-End (Antes de enviar)
+    const formCadastro = document.getElementById('formCadastro');
+    const inputSenha = document.getElementById('senha');
+    const inputConfirmaSenha = document.getElementById('confirma_senha');
+
+    if (formCadastro) {
+        formCadastro.addEventListener('submit', function (e) {
+            // Se as senhas forem diferentes...
+            if (inputSenha.value !== inputConfirmaSenha.value) {
+                e.preventDefault(); // Impede o formulário de ir para o PHP!
+                inputConfirmaSenha.classList.add('is-invalid'); // Deixa a caixa vermelha e mostra o aviso
+                inputConfirmaSenha.focus(); // Joga o cursor do mouse lá pra pessoa arrumar
+            } else {
+                inputConfirmaSenha.classList.remove('is-invalid'); // Tudo certo, deixa passar
+            }
+        });
+
+        // Limpa o erro (tira o vermelho) assim que a pessoa começa a apagar/digitar de novo
+        inputConfirmaSenha.addEventListener('input', function () {
+            inputConfirmaSenha.classList.remove('is-invalid');
+        });
+    }
+
 </script>
 
 <?php
