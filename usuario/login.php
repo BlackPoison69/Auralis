@@ -47,10 +47,11 @@ require_once '../geral/header.php';
                         </div>
                     </div>
 
-                    <div class="mb-4 form-check">
-                        <input type="checkbox" class="form-check-input custom-switch" id="lembrar" name="lembrar">
-                        <label class="form-check-label text-light opacity-75 small" for="lembrar">Lembrar de mim neste
-                            dispositivo</label>
+                    <div class="form-check text-start mb-4">
+                        <input class="form-check-input bg-dark border-secondary" type="checkbox" name="lembrar" value="sim" id="lembrar">
+                        <label class="form-check-label text-light opacity-75" for="lembrar">
+                            Salvar neste computador
+                        </label>
                     </div>
 
                     <div class="d-grid mt-4">
