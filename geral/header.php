@@ -95,7 +95,7 @@ if (session_status() === PHP_SESSION_NONE) {
                                     </a>
                                 </li>
                                 <li>
-                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="#">
+                                    <a class="dropdown-item text-light d-flex align-items-center py-2 transition-hover" href="/Auralis/configuracoes.php">
                                         <i class="bi bi-gear me-2" style="color: gold;"></i> Configurações
                                     </a>
                                 </li>

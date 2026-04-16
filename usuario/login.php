@@ -16,6 +16,33 @@ require_once '../geral/header.php';
                     <h2 class="fw-bold text-light">Bem-vindo de volta</h2>
                     <p class="text-light opacity-75">Acesse sua conta para continuar.</p>
                 </div>
+<?php if (isset($_GET['erro'])): ?>
+                    <?php if ($_GET['erro'] === 'invalido'): ?>
+                        <div class="alert alert-danger d-flex align-items-center rounded-3 shadow-sm border-0 mb-4 bg-danger bg-opacity-10 text-danger" role="alert">
+                            <i class="bi bi-exclamation-triangle-fill me-3 fs-5"></i>
+                            <div><strong>Ops!</strong> E-mail ou senha incorretos. Tente novamente.</div>
+                        </div>
+                    <?php elseif ($_GET['erro'] === 'vazio'): ?>
+                        <div class="alert alert-warning d-flex align-items-center rounded-3 shadow-sm border-0 mb-4 bg-warning bg-opacity-10 text-warning" role="alert">
+                            <i class="bi bi-exclamation-circle-fill me-3 fs-5"></i>
+                            <div>Por favor, preencha todos os campos para entrar.</div>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+
+                <?php if (isset($_GET['cadastro']) && $_GET['cadastro'] === 'sucesso'): ?>
+                    <div class="alert alert-success d-flex align-items-center rounded-3 shadow-sm border-0 mb-4 bg-success bg-opacity-10 text-success" role="alert">
+                        <i class="bi bi-check-circle-fill me-3 fs-5"></i>
+                        <div><strong>Conta criada com sucesso!</strong> Faça seu login para começar.</div>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (isset($_GET['conta']) && $_GET['conta'] === 'excluida'): ?>
+                    <div class="alert alert-info d-flex align-items-center rounded-3 shadow-sm border-0 mb-4 bg-info bg-opacity-10 text-info" role="alert">
+                        <i class="bi bi-info-circle-fill me-3 fs-5"></i>
+                        <div>Sua conta foi excluída permanentemente. Sentiremos sua falta no Auralis!</div>
+                    </div>
+                <?php endif; ?>
 
                 <form action="processa_login.php" method="POST">
 
